@@ -74,6 +74,15 @@ io.on('connection', (socket) => {
   socket.on('skip_word', (_data, ack) => safeAck(ack)(room ? room.skip(playerId) : { ok: false, error: 'Not in a room.' }));
   socket.on('guess', ({ text } = {}, ack) => safeAck(ack)((room && room.guess(playerId, text)) || {}));
 
+  socket.on('leave_room', (_data, ack) => {
+    if (room) {
+      socket.leave(room.code);
+      room.removePlayer(playerId);
+      room = null;
+    }
+    safeAck(ack)({ ok: true });
+  });
+
   socket.on('disconnect', () => {
     // Only mark disconnected if this socket is still the player's current one (not replaced by a reconnect).
     const p = room?.players.get(playerId);

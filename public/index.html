@@ -20,8 +20,20 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div class="bg-blobs" aria-hidden="true">
-      <span></span><span></span><span></span><span></span>
+    <!-- floating "pixels" in the background -->
+    <div class="bg-pixels" aria-hidden="true">
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
     </div>
 
     <header class="topbar">
@@ -98,9 +110,19 @@
           </form>
           <p class="error" id="soloError" role="alert"></p>
           <div class="solo-actions">
-            <button class="btn btn-small" id="undoBtn" type="button">↩️ Undo</button>
-            <button class="btn btn-small" id="soloClearBtn" type="button">🧹 Clear</button>
-            <button class="btn btn-small btn-save" id="soloSaveBtn" type="button">💾 Save</button>
+            <button class="btn btn-small" id="undoBtn" type="button">
+              ↩️ Undo
+            </button>
+            <button class="btn btn-small" id="soloClearBtn" type="button">
+              🧹 Clear
+            </button>
+            <button
+              class="btn btn-small btn-save"
+              id="soloSaveBtn"
+              type="button"
+            >
+              💾 Save
+            </button>
             <label class="inline-field">
               <span>Grid</span>
               <select id="soloGridSelect"></select>
@@ -115,7 +137,11 @@
             <div class="chips" id="soloChips" data-input="soloInput"></div>
           </details>
           <ol class="draw-log" id="soloLog"></ol>
-          <a class="btn btn-small btn-ghost solo-home" id="soloHomeBtn" href="./">
+          <a
+            class="btn btn-small btn-ghost solo-home"
+            id="soloHomeBtn"
+            href="./"
+          >
             🏠 Main page
           </a>
         </div>
@@ -204,12 +230,21 @@
                 <span class="timer" id="timer">75</span>
               </div>
             </div>
-            <div class="pause-banner" id="pauseBanner" role="status" hidden></div>
+            <div
+              class="pause-banner"
+              id="pauseBanner"
+              role="status"
+              hidden
+            ></div>
             <div class="word" id="wordBox"></div>
             <div class="grid-wrap">
               <div class="pixel-grid" id="pixelGrid"></div>
               <!-- Mobile: short-lived guess bubbles float over the grid -->
-              <div class="guess-bubbles" id="guessBubbles" aria-hidden="true"></div>
+              <div
+                class="guess-bubbles"
+                id="guessBubbles"
+                aria-hidden="true"
+              ></div>
             </div>
             <div class="turn-actions">
               <button
@@ -296,20 +331,23 @@
               id="saveAllBtn"
               type="button"
             >
-              💾 Save all
+              💾 Save All Art
             </button>
           </div>
           <div id="gallery"></div>
         </div>
         <div class="again-actions">
           <button class="btn btn-big btn-go" id="rematchBtn" type="button">
-            🔁 Rematch
+            🔁 Play Again!
           </button>
           <button class="btn btn-big" id="againBtn" type="button">
             ⚙️ Change settings
           </button>
         </div>
         <p class="sub small" id="againNote"></p>
+        <a class="btn btn-big btn-ghost" id="resultsHomeBtn" href="./">
+          🏠 Back to home
+        </a>
       </section>
     </main>
 
@@ -362,12 +400,13 @@
         </li>
         <li>
           <b>Shapes:</b> dot, square, box, circle, ring, plus, x, line, row,
-          col, diamond, triangle. Triangles can point: <code>triangle right</code>,
-          <code>R triangle</code>, <code>big down triangle</code> (up is the
-          default). <b>Sizes:</b> small (3×3), big (5×5), huge
-          (9×9), or <b>s</b> + a number anywhere: <code>beige square s3 50</code>
-          is a 3×3 square on cell 50 (<code>s4</code> = 4×4, and so on). Shapes
-          stop at the edge of the grid.
+          col, diamond, triangle. Triangles can point:
+          <code>triangle right</code>, <code>R triangle</code>,
+          <code>big down triangle</code> (up is the default).
+          <b>Sizes:</b> small (3×3), big (5×5), huge (9×9), or <b>s</b> + a
+          number anywhere: <code>beige square s3 50</code> is a 3×3 square on
+          cell 50 (<code>s4</code> = 4×4, and so on). Shapes stop at the edge of
+          the grid.
         </li>
         <li>
           <b>Colors:</b> any color word works, even things like <i>lava</i>.

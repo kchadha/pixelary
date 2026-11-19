@@ -205,11 +205,19 @@
     const all = state?.game?.gallery || [];
     if (all.length) PixelArt.save(all, `${all.length} masterpiece${all.length === 1 ? '' : 's'}`, 'pixelary-gallery.png');
   });
+  // 💾 on a single artwork saves just that one.
   $('gallery').addEventListener('click', (e) => {
-    const round = Number(e.target.closest('[data-round]')?.dataset.round);
-    if (!round) return;
-    const arts = state.game.gallery.filter((a) => a.round === round);
-    PixelArt.save(arts, `Round ${round}`, `pixelary-round-${round}.png`);
+    const idx = e.target.closest('.art-save')?.dataset.idx;
+    const art = idx !== undefined && state.game.gallery[Number(idx)];
+    if (art) PixelArt.save([art], `Round ${art.round}`, `pixelary-${PixelArt.slug(art.word)}.png`);
+  });
+  // Back to home: leave the room for real (so you don't linger as "offline"), then go.
+  $('resultsHomeBtn').addEventListener('click', (e) => {
+    e.preventDefault();
+    sessionStorage.removeItem('pixelary-room');
+    const go = () => { location.href = location.pathname; };
+    socket.emit('leave_room', null, go);
+    setTimeout(go, 600); // don't wait forever on a flaky connection
   });
 
   /** The drawing from the turn being revealed right now (if anything was drawn). */
@@ -418,18 +426,25 @@
     if (renderGallery.key === key) return; // don't rebuild canvases on every update
     renderGallery.key = key;
     const rounds = [...new Set(gallery.map((a) => a.round))];
+    // Round labels only matter when there's more than one round.
     $('gallery').innerHTML = rounds
-      .map((r) => `<section class="gallery-round"><div class="gallery-round-head"><h3>Round ${r}</h3>` +
-        `<button class="btn btn-small btn-save" type="button" data-round="${r}">💾 Save round ${r}</button></div>` +
+      .map((r) => `<section class="gallery-round">${rounds.length > 1 ? `<h3>Round ${r}</h3>` : ''}` +
         `<div class="gallery-row" data-row="${r}"></div></section>`)
       .join('');
-    gallery.forEach((art) => {
+    gallery.forEach((art, i) => {
       const fig = document.createElement('figure');
       fig.className = 'art';
       fig.appendChild(PixelArt.thumbnail(art));
       const cap = document.createElement('figcaption');
       cap.innerHTML = `<b>${esc(art.word)}</b>by ${art.avatar} ${esc(art.artist)}`;
       fig.appendChild(cap);
+      const save = document.createElement('button');
+      save.type = 'button';
+      save.className = 'art-save';
+      save.dataset.idx = String(i);
+      save.title = save.ariaLabel = `Save “${art.word}”`;
+      save.textContent = '💾';
+      fig.appendChild(save);
       $('gallery').querySelector(`[data-row="${art.round}"]`).appendChild(fig);
     });
   }

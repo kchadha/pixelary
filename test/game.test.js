@@ -298,3 +298,15 @@ test('solo free draw: prompts and the shared parser, no room needed', async (t) 
   assert.equal((await emit(s, 'solo_parse', { text: 'red 82', gridSize: 9 })).ok, false);
   assert.equal((await emit(s, 'solo_parse', { text: 'red 64', gridSize: 'bogus' })).ok, true, 'falls back to 8x8');
 });
+
+test('leave_room removes you right away (Back to home)', async (t) => {
+  const a = connect(url, { transports: ['websocket'] }), b = connect(url, { transports: ['websocket'] });
+  t.after(() => { a.close(); b.close(); });
+  const { code } = await emit(a, 'create_room', { name: 'A', playerId: 'leaver-aaaaaaa' });
+  const both = nextState(a, (s) => s.players.length === 2);
+  await emit(b, 'join_room', { code, name: 'B', playerId: 'leaver-bbbbbbb' });
+  await both;
+  const gone = nextState(a, (s) => s.players.length === 1);
+  assert.equal((await emit(b, 'leave_room', null)).ok, true);
+  assert.equal((await gone).players[0].name, 'A');
+});
