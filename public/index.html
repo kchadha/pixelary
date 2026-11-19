@@ -52,6 +52,9 @@
             ✨ Create a game
           </button>
         </form>
+        <button class="btn btn-big btn-solo" id="soloBtn" type="button">
+          🎨 Free draw (solo)
+        </button>
         <details class="join-code" id="joinCodeBox">
           <summary>Got a code instead?</summary>
           <form id="codeForm" class="row" autocomplete="off">
@@ -63,6 +66,59 @@
         <a class="btn btn-big btn-go" id="homeBtn" href="./" hidden>
           🏠 Back to main page
         </a>
+      </section>
+
+      <!-- SOLO FREE DRAW: no timer, a prompt, commands + click-to-paint -->
+      <section class="view" id="soloView" hidden>
+        <div class="card solo-card">
+          <div class="solo-top">
+            <div class="word" id="soloPrompt"></div>
+            <button class="btn btn-small" id="soloNewBtn" type="button">
+              🔀 New prompt
+            </button>
+          </div>
+          <div class="grid-wrap">
+            <div class="pixel-grid paintable" id="soloGrid"></div>
+          </div>
+          <div
+            class="palette"
+            id="palette"
+            role="radiogroup"
+            aria-label="Paint color"
+          ></div>
+          <form id="soloForm" class="row" autocomplete="off">
+            <input
+              id="soloInput"
+              maxlength="120"
+              placeholder='or type: "yellow circle big 28"'
+              enterkeyhint="send"
+              autocapitalize="off"
+            />
+            <button class="btn" type="submit">Paint!</button>
+          </form>
+          <p class="error" id="soloError" role="alert"></p>
+          <div class="solo-actions">
+            <button class="btn btn-small" id="undoBtn" type="button">↩️ Undo</button>
+            <button class="btn btn-small" id="soloClearBtn" type="button">🧹 Clear</button>
+            <button class="btn btn-small btn-save" id="soloSaveBtn" type="button">💾 Save</button>
+            <label class="inline-field">
+              <span>Grid</span>
+              <select id="soloGridSelect"></select>
+            </label>
+            <label class="inline-field">
+              <span>Prompts</span>
+              <select id="soloDiffSelect"></select>
+            </label>
+          </div>
+          <details class="cheat" id="soloCheat">
+            <summary>📖 Cheat sheet</summary>
+            <div class="chips" id="soloChips" data-input="soloInput"></div>
+          </details>
+          <ol class="draw-log" id="soloLog"></ol>
+          <a class="btn btn-small btn-ghost solo-home" id="soloHomeBtn" href="./">
+            🏠 Main page
+          </a>
+        </div>
       </section>
 
       <!-- LOBBY -->
@@ -194,7 +250,7 @@
             <div id="drawPanel" hidden>
               <details class="cheat" id="cheatSheet" open>
                 <summary>📖 Cheat sheet</summary>
-                <div class="chips" id="chips"></div>
+                <div class="chips" id="chips" data-input="drawInput"></div>
               </details>
             </div>
             <ol class="draw-log" id="drawLog"></ol>
@@ -245,9 +301,14 @@
           </div>
           <div id="gallery"></div>
         </div>
-        <button class="btn btn-big btn-go" id="againBtn" type="button">
-          🔁 Back to lobby
-        </button>
+        <div class="again-actions">
+          <button class="btn btn-big btn-go" id="rematchBtn" type="button">
+            🔁 Rematch
+          </button>
+          <button class="btn btn-big" id="againBtn" type="button">
+            ⚙️ Change settings
+          </button>
+        </div>
         <p class="sub small" id="againNote"></p>
       </section>
     </main>
@@ -301,9 +362,12 @@
         </li>
         <li>
           <b>Shapes:</b> dot, square, box, circle, ring, plus, x, line, row,
-          col, diamond, triangle. <b>Sizes:</b> small (3×3), big (5×5), huge
-          (9×9), or a number: <code>beige square 3 50</code> is a 3×3 square on
-          cell 50. Shapes stop at the edge of the grid.
+          col, diamond, triangle. Triangles can point: <code>triangle right</code>,
+          <code>R triangle</code>, <code>big down triangle</code> (up is the
+          default). <b>Sizes:</b> small (3×3), big (5×5), huge
+          (9×9), or <b>s</b> + a number anywhere: <code>beige square s3 50</code>
+          is a 3×3 square on cell 50 (<code>s4</code> = 4×4, and so on). Shapes
+          stop at the edge of the grid.
         </li>
         <li>
           <b>Colors:</b> any color word works, even things like <i>lava</i>.
@@ -353,6 +417,7 @@
       src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"
       defer
     ></script>
+    <script src="wake.js"></script>
     <script src="art.js"></script>
     <script src="app.js"></script>
   </body>

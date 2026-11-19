@@ -3,6 +3,8 @@ const http = require('http');
 const express = require('express');
 const { Server } = require('socket.io');
 const { createRoom, getRoom } = require('./rooms');
+const { parseCommand } = require('./commandParser');
+const { pickWord } = require('./words');
 
 const app = express();
 const server = http.createServer(app);
@@ -48,6 +50,17 @@ io.on('connection', (socket) => {
     enter(target, id, name, ack);
   });
 
+  // ---------- solo free draw: no room, just prompts + the shared command parser ----------
+  const soloUsed = new Set(); // per connection, so prompts don't repeat
+  socket.on('solo_word', ({ difficulty } = {}, ack) => {
+    const d = ['easy', 'medium', 'hard', 'mix'].includes(difficulty) ? difficulty : 'easy';
+    safeAck(ack)({ word: pickWord(soloUsed, d) });
+  });
+  socket.on('solo_parse', ({ text, gridSize } = {}, ack) => {
+    const size = [8, 9, 16, 17].includes(Number(gridSize)) ? Number(gridSize) : 8;
+    safeAck(ack)(parseCommand(String(text || '').slice(0, 120), { gridSize: size }));
+  });
+
   // Lets an invite link check up front whether its game still exists.
   socket.on('check_room', ({ code } = {}, ack) => safeAck(ack)({ exists: !!getRoom(code) }));
 
@@ -55,6 +68,7 @@ io.on('connection', (socket) => {
   socket.on('update_settings', (settings) => room?.updateSettings(playerId, settings));
   socket.on('start_game', (_data, ack) => safeAck(ack)(room ? room.start(playerId) : { error: 'Not in a room.' }));
   socket.on('play_again', () => room?.playAgain(playerId));
+  socket.on('rematch', (_data, ack) => safeAck(ack)(room ? room.rematch(playerId) : { ok: false, error: 'Not in a room.' }));
   socket.on('draw', ({ text } = {}, ack) => safeAck(ack)(room ? room.draw(playerId, text) : { ok: false, error: 'Not in a room.' }));
   socket.on('end_turn', (_data, ack) => safeAck(ack)(room ? room.endTurnEarly(playerId) : { ok: false, error: 'Not in a room.' }));
   socket.on('skip_word', (_data, ack) => safeAck(ack)(room ? room.skip(playerId) : { ok: false, error: 'Not in a room.' }));

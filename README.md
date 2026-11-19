@@ -14,12 +14,18 @@ grumpy 1                      → 🎲 a random color in the top-left corner
 ## How to play
 
 1. The host creates a game and sends the invite link (`…/?room=ABCD`).
-2. Everyone joins and hits **Ready**. The host picks the settings (rounds, seconds per turn or **no timer**, how long the answer is shown, grid size 8×8, 9×9, 16×16 or 17×17 (odd sizes have a true center cell, so centered shapes are easier), word difficulty: easy, medium, hard or mix it up) and starts the game.
+2. Everyone joins and hits **Ready**. The host picks the settings (rounds, seconds per turn (75–180, default 120) or **no timer**, how long the answer is shown, grid size 8×8, 9×9, 16×16 or 17×17 (odd sizes have a true center cell, so centered shapes are easier), word difficulty: easy, medium, hard or mix it up) and starts the game.
 3. Players take turns drawing a secret word. Everyone else types guesses.
-4. A turn ends when time runs out or everyone has guessed it. The word is then shown for 10 seconds.
+4. A turn ends when time runs out or everyone has guessed it. The word is then shown for 5 seconds (the host can change this), along with the drawer's commands, which are hidden from guessers while drawing.
 5. **No-timer games:** a turn ends when everyone has guessed, or when the drawer or host hits **🏁 End turn**.
 6. **Save the art:** during the reveal, hit **💾 Save drawing** for a PNG of that picture. At the end, the gallery shows every drawing, with **Save round** and **Save all** buttons. Images include the Pixelary title, each word and the artist's name.
-7. Stuck with a word? The drawer can hit **⏭️ Skip word** for a new word and a blank grid, any time before someone guesses. The timer keeps running.
+7. **Play again:** on the results screen the host can hit **🔁 Rematch** (same players and settings, starts right away) or **⚙️ Change settings** (back to the lobby with everyone still ready).
+8. **Phones:** the screen stays awake during a game. If a connection drops (say a phone locks), the game pauses for up to 2 minutes and resumes when they're back.
+9. Stuck with a word? The drawer can hit **⏭️ Skip word** for a new word and a blank grid, any time before someone guesses. The timer keeps running.
+
+### Free draw (solo)
+
+Hit **🎨 Free draw** on the main page (or open `/#solo`) to doodle on your own. There's no timer, and you get a prompt to draw (🔀 for a new one). Type the same commands as in the game, or tap or drag on the grid with a 12-color palette and an eraser. It has undo, clear, grid size and prompt difficulty, and 💾 saves your art as a PNG.
 
 ### Drawing commands
 
@@ -28,9 +34,9 @@ grumpy 1                      → 🎲 a random color in the top-left corner
 | Part  | Options |
 |-------|---------|
 | color | Any color word, including colorful things like `lava` or `sky blue`. Words it doesn't know get a **random** color. `blue all` fills the whole grid. Use `clear` (or `erase`) to remove color: `clear 12`, `clear row 9`, or `clear all` to wipe the grid. |
-| shape | `dot` (default), `square`, `box`, `circle` (filled), `ring` (outline), `plus`, `x`, `line`, `row`, `col`/`column`, `diamond`, `triangle` |
-| size  | `small` (3×3, default), `big` (5×5), `huge` (9×9), or a number right after the shape: `beige square 3 50` (or `3x3`) is a 3×3 square centered on cell 50. Shapes are cut off at the grid edge; they never wrap to the other side. |
-| cells | `13`: one cell, with the shape centered on it. `1, 6, 11`: a list, each cell painted (shapes like `square` are stamped on each; use commas so `plus 7, 19` isn't read as "size 7 at 19"). `1 to 21` or `1-21`: a straight line between two cells, including diagonals. Cells are numbered left to right from 1 in the top-left: up to 64 on 8×8, 81 on 9×9, 256 on 16×16, 289 on 17×17. Spoken numbers like "thirteen" also work. |
+| shape | `dot` (default), `square`, `box`, `circle` (filled), `ring` (outline), `plus`, `x`, `line`, `row`, `col`/`column`, `diamond`, `triangle`. Triangles can point a direction: `triangle right`, `R triangle`, `big down triangle` (up/down/left/right, U/D/L/R, or north/south/east/west; default up). |
+| size  | `small` (3×3, default), `big` (5×5), `huge` (9×9), or `s` + a number anywhere in the command: `beige square s3 50`, `s3 beige square 50` and `beige square 50 s3` are all a 3×3 square centered on cell 50 (`s4` = 4×4, etc.; `3x3` also works). Shapes are cut off at the grid edge; they never wrap to the other side. |
+| cells | `13`: one cell, with the shape centered on it. `1, 6, 11`: a list, each cell painted (shapes like `square` are stamped on each). `1 to 21` or `1-21`: a straight line between two cells, including diagonals. Cells are numbered left to right from 1 in the top-left: up to 64 on 8×8, 81 on 9×9, 256 on 16×16, 289 on 17×17. Spoken numbers like "thirteen" also work. |
 
 `row` or `col` with a single cell and no size fills that **whole** row or column. Add a size (`col small 28`) to get a short segment instead.
 
@@ -75,7 +81,7 @@ server/
   commandParser.js  "lime square big 13" → color + cells
   colors.js         color interpreter (word → hex)
   words.js          random word picker (words.json)
-public/             static client (index.html, app.js, art.js for PNG export, style.css)
+public/             static client (index.html, app.js, art.js for PNG export, wake.js keeps phones awake, style.css)
 test/               node:test unit tests + end-to-end socket test
 ```
 

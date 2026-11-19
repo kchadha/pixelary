@@ -226,3 +226,48 @@ test('odd grids (9x9, 17x17) have a true center', () => {
   assert.equal(Math.max(...cols), 6);
   assert.equal(parseCommand('red square 17 145', { gridSize: 17 }).cells.length, 289); // center of 17x17
 });
+
+test('size number works in any word order: "square beige 3 52"', () => {
+  const expected = [42, 43, 44, 50, 51, 52, 58, 59, 60]; // 3x3 around cell 52 on 8x8
+  for (const cmd of ['square beige 3 52', 'beige square 3 52', 'beige 3 square 52', '3 square beige 52', 'beige square size 3 52']) {
+    assert.deepEqual(parseCommand(cmd).cells, expected, cmd);
+  }
+  // still lists / ranges when separated
+  assert.deepEqual(parseCommand('square beige 3, 52').cells.length, 6 + 9); // 3x3 at 3 (clipped) + 3x3 at 52
+  assert.deepEqual(parseCommand('square beige 3 and 52').cells.length, 15);
+  assert.deepEqual(parseCommand('beige 3 52').cells, [2, 51]); // no shape: two cells
+  assert.deepEqual(parseCommand('beige line 3 to 6').cells, [2, 3, 4, 5]);
+});
+
+test('"s" + number is the size, anywhere in the command', () => {
+  const expected = [42, 43, 44, 50, 51, 52, 58, 59, 60]; // 3x3 around cell 52 on 8x8
+  for (const cmd of ['s3 beige square 52', 'beige square 52 s3', 'beige square s3 52', 'beige s3 square 52']) {
+    assert.deepEqual(parseCommand(cmd).cells, expected, cmd);
+  }
+  assert.equal(parseCommand('red circle s5 28').cells.length, 21);
+  assert.equal(parseCommand('red square s4 28').cells.length, 16);
+  assert.equal(parseCommand('red square s9 28').ok, false); // too big for 8x8
+  // with s-size, every bare number is a cell again
+  assert.equal(parseCommand('red plus s3 10 30').cells.length, 10);
+});
+
+test('triangles can point up, down, left or right', () => {
+  const p5 = (t) => parseCommand(t, { gridSize: 5 }).cells;
+  const up = [2, 7, 11, 12, 13, 16, 17, 18, 20, 21, 22, 23, 24]; // tip at the top
+  const down = [0, 1, 2, 3, 4, 6, 7, 8, 11, 12, 13, 17, 22];
+  const right = [0, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16, 17, 20];
+  const left = [4, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19, 24];
+  assert.deepEqual(p5('red triangle big 13'), up);
+  assert.deepEqual(p5('red triangle up big 13'), up);
+  for (const cmd of ['red triangle right big 13', 'red R triangle big 13', 'red right triangle big 13', 'red triangle pointing east big 13']) {
+    assert.deepEqual(p5(cmd), right, cmd);
+  }
+  for (const cmd of ['red big down triangle 13', 'red triangle upside down big 13', 'red D triangle s5 13']) {
+    assert.deepEqual(p5(cmd), down, cmd);
+  }
+  assert.deepEqual(p5('red left triangle big 13'), left);
+  assert.equal(parseCommand('red L triangle 28').dir, 'left');
+  // directions don't change symmetric shapes, and aren't mistaken for colors
+  assert.deepEqual(p5('red square right big 13'), p5('red square big 13'));
+  assert.equal(parseCommand('right red triangle 28').hex, '#ff0000');
+});

@@ -13,10 +13,10 @@ const MAX_FEED = 60;
 const MAX_LOG = 40;
 
 // turnTime 0 = no timer: the turn ends when everyone guesses or the drawer/host ends it.
-const DEFAULT_SETTINGS = { rounds: 2, turnTime: 75, revealTime: 10, difficulty: 'easy', gridSize: 8 };
+const DEFAULT_SETTINGS = { rounds: 2, turnTime: 120, revealTime: 5, difficulty: 'easy', gridSize: 8 };
 const ALLOWED = {
   rounds: [1, 2, 3, 4, 5],
-  turnTime: [0, 45, 60, 75, 90, 120],
+  turnTime: [0, 75, 90, 120, 150, 180], // 75s minimum (0 = no timer)
   revealTime: [5, 10, 15, 20, 30],
   difficulty: ['easy', 'medium', 'hard', 'mix'],
   gridSize: [8, 9, 16, 17],
@@ -247,28 +247,45 @@ class Room {
   start(playerId) {
     if (playerId !== this.hostId) return { error: 'Only the host can start.' };
     if (!this.canStart()) return { error: 'Need at least 2 players and everyone ready.' };
+    this.begin();
+    return { ok: true };
+  }
+
+  /** Fresh game with the current players and settings (scores reset, words keep avoiding repeats). */
+  begin() {
     for (const p of this.players.values()) p.score = 0;
     this.feed = [];
     this.game = { gridSize: this.settings.gridSize, round: 0, turnQueue: [], drawerId: null, word: null, grid: [], log: [], guessed: new Map(), turnEndsAt: 0, turnNumber: 0, gallery: [] };
     this.system('🎬 Game on!');
     this.nextTurn();
-    return { ok: true };
   }
 
-  toLobby() {
+  toLobby({ keepReady = false } = {}) {
     clearTimeout(this.timer);
     clearTimeout(this.pauseTimer);
     this.phase = 'lobby';
     this.game = null;
-    for (const p of this.players.values()) p.ready = false;
+    for (const p of this.players.values()) p.ready = keepReady && p.connected;
     // drop anyone who disconnected
     for (const p of [...this.players.values()]) if (!p.connected) this.removePlayer(p.id);
     if (rooms.has(this.code)) this.broadcast();
   }
 
+  /** Results screen, host: back to the lobby to tweak settings. Everyone stays ready. */
   playAgain(playerId) {
     if (playerId !== this.hostId || this.phase !== 'results') return;
-    this.toLobby();
+    this.toLobby({ keepReady: true });
+  }
+
+  /** Results screen, host: start a new game right away with the same players and settings. */
+  rematch(playerId) {
+    if (playerId !== this.hostId) return { ok: false, error: 'Only the host can start a rematch.' };
+    if (this.phase !== 'results') return { ok: false, error: 'The game isn’t over yet.' };
+    for (const p of [...this.players.values()]) if (!p.connected) this.removePlayer(p.id);
+    if (this.connectedPlayers().length < 2) return { ok: false, error: 'Need at least 2 players for a rematch.' };
+    for (const p of this.players.values()) p.ready = true;
+    this.begin();
+    return { ok: true };
   }
 
   // ---------- turns ----------
@@ -452,7 +469,9 @@ class Room {
         word: showWord ? g.word : null,
         hint: hintFor(g.word),
         grid: g.grid,
-        log: g.log,
+        // The drawer's commands name colors and shapes, which gives too much away:
+        // only the drawer sees them while drawing; everyone sees them once the word is revealed.
+        log: isDrawer || this.phase !== 'drawing' ? g.log : [],
         youGuessed: g.guessed.has(playerId),
         paused: g.paused
           ? { waitingFor: this.awayPlayers().map((p) => ({ name: p.name, avatar: p.avatar })), remainingMs: Math.max(0, g.paused.endsAt - now) }

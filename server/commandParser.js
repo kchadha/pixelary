@@ -12,6 +12,7 @@ const GRID_SIZE = 8; // default; rooms pass their own size (8 or 16)
 const FILLER = new Set([
   'in', 'at', 'on', 'cell', 'cells', 'the', 'a', 'an', 'of', 'number', 'numbers', 'no', 'num', 'please',
   'and', 'with', 'centered', 'center', 'around', 'position', 'shape', 'size', 'from', 'between', 'then',
+  'pointing', 'pointed', 'facing', 'points', 'upside', 'side',
 ]);
 
 const SHAPES = {
@@ -30,6 +31,16 @@ const SHAPES = {
 };
 // Shapes that just mean "paint these cells" when given a list of cells.
 const PLAIN_SHAPES = new Set(['dot', 'line', 'row', 'column']);
+
+// Which way a shape points. Only shapes in ORIENTED use it (a square has no "up").
+// Default is up: a triangle's tip at the top.
+const DIRECTIONS = {
+  up: 'up', u: 'up', north: 'up', top: 'up', upward: 'up', upwards: 'up',
+  down: 'down', d: 'down', south: 'down', bottom: 'down', downward: 'down', downwards: 'down',
+  left: 'left', l: 'left', west: 'left', leftward: 'left', leftwards: 'left',
+  right: 'right', r: 'right', east: 'right', rightward: 'right', rightwards: 'right',
+};
+const ORIENTED = new Set(['triangle']);
 
 const SIZES = {
   // value = width/height in cells. A number also works: "square 3 50" or "square 3x3 50".
@@ -90,7 +101,7 @@ const inDisc = (dr, dc, R) => dr * dr + dc * dc <= R * R + 0.5 * R;
  * Odd spans are centered exactly; even spans lean right/down by half a cell.
  * Anything past the grid edge is dropped — shapes never wrap to the other side.
  */
-function shapeCells(shape, span, row, col, size = GRID_SIZE) {
+function shapeCells(shape, span, row, col, size = GRID_SIZE, dir = 'up') {
   const N = shape === 'dot' ? 1 : span;
   const lo = -Math.floor((N - 1) / 2), hi = lo + N - 1;
   const c = (lo + hi) / 2; // 0 for odd spans, 0.5 for even
@@ -98,7 +109,13 @@ function shapeCells(shape, span, row, col, size = GRID_SIZE) {
   const cells = [];
   for (let dr = lo; dr <= hi; dr++) {
     for (let dc = lo; dc <= hi; dc++) {
-      const u = dr - c, v = dc - c; // offset from the true center
+      let u = dr - c, v = dc - c; // offset from the true center
+      // Rotate so the shape's "up" points the requested way (u = rows down, v = cols right).
+      if (ORIENTED.has(shape)) {
+        if (dir === 'down') u = -u;
+        else if (dir === 'right') [u, v] = [-v, u];
+        else if (dir === 'left') [u, v] = [v, u];
+      }
       const au = Math.abs(u), av = Math.abs(v);
       let on = false;
       switch (shape) {
@@ -151,25 +168,30 @@ function parseCommand(text, { gridSize = GRID_SIZE, rand = Math.random } = {}) {
   const tokens = tokenize(text);
   if (!tokens.length) return fail('Type something like "red 13" or "lime square big 7".');
 
-  let shape = null, sizeWord = null, span = null;
+  let shape = null, sizeWord = null, span = null, dir = null;
   const groups = []; // { a, b? } cell numbers (1-based); b set for ranges
   const leftovers = []; // { tok, index }
   let pendingRange = false;
   const isNum = (t) => parseNumberToken(t) !== null;
 
+  // A shape (or "size") anywhere + exactly two numbers with no comma / "and" / "to" between
+  // them means "<size> <cell>", whatever the word order: "square beige 3 52" = 3x3 at 52.
+  // With commas it's a list instead: "plus 7, 19" stamps a plus on 7 and on 19.
+  const numIdx = tokens.flatMap((t, i) => (isNum(t) ? [i] : []));
+  const hasShape = tokens.some((t) => SHAPES[t] || t === 'size');
+  const between = numIdx.length === 2 ? tokens.slice(numIdx[0] + 1, numIdx[1]) : [];
+  const sizeAt = numIdx.length === 2 && hasShape && !between.some((t) => t === ',' || t === 'and' || RANGE_WORDS.has(t)) ? numIdx[0] : -1;
+
   for (const [index, tok] of tokens.entries()) {
     if (tok === ',') continue;
 
-    // Explicit size: "3x3"
-    const dims = tok.match(/^(\d+)x(\d+)$/);
+    // Explicit size, anywhere in the command: "s3" (preferred) or "3x3" → 3 cells wide.
+    const dims = tok.match(/^s(\d+)$/) || tok.match(/^(\d+)x\d+$/);
     if (dims && span === null) { span = parseInt(dims[1], 10); sizeWord = tok; continue; }
 
     const n = parseNumberToken(tok);
-    // A number right after a shape word (or "size") with exactly one more number after it,
-    // and no comma/range in between, is a size: "beige square 3 50".
-    const prev = tokens[index - 1], next = tokens[index + 1];
-    if (n !== null && span === null && !sizeWord && (SHAPES[prev] || prev === 'size') &&
-        next !== ',' && !RANGE_WORDS.has(next) && tokens.slice(index + 1).filter(isNum).length === 1) {
+    // Size number (see sizeAt above): "beige square 3 50", "square beige 3 50".
+    if (index === sizeAt && span === null && !sizeWord) {
       span = n;
       sizeWord = String(n);
       continue;
@@ -186,6 +208,7 @@ function parseCommand(text, { gridSize = GRID_SIZE, rand = Math.random } = {}) {
       continue;
     }
     if (SIZES[tok] && !sizeWord) { sizeWord = tok; span = SIZES[tok]; continue; }
+    if (DIRECTIONS[tok] && !dir) { dir = DIRECTIONS[tok]; continue; }
     // Shape words win unless the word is also a color and we have no color yet.
     if (SHAPES[tok] && (leftovers.length > 0 || !isKnownColor(tok))) {
       // Only the first shape counts ("black line col 1 to 21" is still a line).
@@ -241,7 +264,7 @@ function parseCommand(text, { gridSize = GRID_SIZE, rand = Math.random } = {}) {
       add(lineBetween(a, g.b - 1, gridSize));
     } else if (groups.length > 1) {
       // A list of cells: paint each one, or stamp a real shape at each.
-      add(PLAIN_SHAPES.has(finalShape) ? [a] : shapeCells(finalShape, finalSpan, ...at(a), gridSize));
+      add(PLAIN_SHAPES.has(finalShape) ? [a] : shapeCells(finalShape, finalSpan, ...at(a), gridSize, dir || 'up'));
     } else if (finalShape === 'row' && !sizeWord) {
       const row = at(a)[0];
       add(Array.from({ length: gridSize }, (_, c) => row * gridSize + c));
@@ -249,12 +272,12 @@ function parseCommand(text, { gridSize = GRID_SIZE, rand = Math.random } = {}) {
       const col = at(a)[1];
       add(Array.from({ length: gridSize }, (_, rr) => rr * gridSize + col));
     } else {
-      add(shapeCells(finalShape, finalSpan, ...at(a), gridSize));
+      add(shapeCells(finalShape, finalSpan, ...at(a), gridSize, dir || 'up'));
     }
   }
 
   return {
-    ok: true, hex, erase, colorWord, known, shape: finalShape, sizeWord, cell: groups[0].a,
+    ok: true, hex, erase, colorWord, known, shape: finalShape, sizeWord, dir: dir || null, cell: groups[0].a,
     cells: [...cells].sort((x, y) => x - y),
   };
 }

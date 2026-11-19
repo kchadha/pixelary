@@ -233,7 +233,7 @@ async function rejoin(code, id, name) {
 }
 
 test('a locked phone pauses the game, and coming back resumes it', async (t) => {
-  const { code, ids, socks, d, g } = await twoPlayerGame('pause1', { turnTime: 60 });
+  const { code, ids, socks, d, g } = await twoPlayerGame('pause1', { turnTime: 90 });
   const drawer = socks[d];
   t.after(() => socks.forEach((s) => s.close()));
   await new Promise((r) => setTimeout(r, 50));
@@ -284,4 +284,17 @@ test('if nobody comes back, the paused game ends on the results screen', async (
   const rs = await results; // after the (test-shortened) 1.5s pause
   assert.equal(rs.players.length, 1);
   assert.ok(rs.feed.some((f) => f.text.includes("didn't make it back")));
+});
+
+test('solo free draw: prompts and the shared parser, no room needed', async (t) => {
+  const s = connect(url, { transports: ['websocket'] });
+  t.after(() => s.close());
+  const seen = new Set();
+  for (let i = 0; i < 5; i++) seen.add((await emit(s, 'solo_word', { difficulty: 'hard' })).word);
+  assert.equal(seen.size, 5, 'prompts do not repeat');
+  const r = await emit(s, 'solo_parse', { text: 'yellow circle big 41', gridSize: 9 });
+  assert.equal(r.ok, true);
+  assert.equal(r.cells.length, 21);
+  assert.equal((await emit(s, 'solo_parse', { text: 'red 82', gridSize: 9 })).ok, false);
+  assert.equal((await emit(s, 'solo_parse', { text: 'red 64', gridSize: 'bogus' })).ok, true, 'falls back to 8x8');
 });

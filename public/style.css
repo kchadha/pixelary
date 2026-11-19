@@ -280,20 +280,23 @@ a.btn { display: inline-block; text-align: center; text-decoration: none; box-si
 }
 .px span {
   position: absolute;
-  top: 3px;
+  top: 0.25rem;
   left: 0.3125rem;
-  font-size: 0.72rem;
-  font-weight: 700;
+  /* Bigger, lighter numbers: heavy weights close up the counters at small sizes. */
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
   line-height: 1;
   pointer-events: none;
 }
 /* Filled cells get --ink or white text from JS (whichever has more contrast). */
-.px.filled span { font-weight: 800; }
+.px.filled span { font-weight: 600; }
 
 /* 16x16: tighter gaps, smaller centered numbers */
 .pixel-grid.dense { width: min(100%, 37.5rem); gap: 2px; padding: 4px; border-radius: 0.75rem; }
 .pixel-grid.dense .px { border-radius: 3px; }
-.pixel-grid.dense .px span { top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: clamp(0.375rem, 1.4vw, 0.5625rem); }
+.pixel-grid.dense .px span { top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: clamp(0.5rem, 1.9vw, 0.72rem); letter-spacing: 0; }
 .px.pop { animation: pop 0.35s ease-out; }
 @keyframes pop {
   0% { transform: scale(0.4) rotate(-15deg); }
@@ -308,6 +311,9 @@ a.btn { display: inline-block; text-align: center; text-decoration: none; box-si
 .btn-save { background: var(--c3); }
 
 /* results gallery */
+.again-actions { display: flex; gap: 0.75rem; }
+.again-actions .btn { flex: 1; }
+#againBtn { background: var(--sky); }
 .gallery-head { display: flex; justify-content: space-between; align-items: center; margin-top: 1.375rem; }
 .gallery-round { margin: 0.875rem 0; }
 .gallery-round-head { display: flex; justify-content: space-between; align-items: center; }
@@ -336,6 +342,7 @@ a.btn { display: inline-block; text-align: center; text-decoration: none; box-si
 .chip:nth-child(4n+4) { background: #e2d7ff; }
 .chip:hover { animation: jelly 0.4s; }
 
+.draw-log:empty { display: none; }
 .draw-log {
   list-style: none;
   padding: 0;
@@ -529,6 +536,35 @@ code { background: #f2eefc; padding: 1px 0.375rem; border-radius: 0.375rem; font
 }
 .comic-sub { font-weight: 700; font-size: 1.1rem; margin-top: 2px; }
 
+/* ---------- solo free draw ---------- */
+.btn-solo { background: var(--sun); }
+#soloView { max-width: 640px; margin: 0.75rem auto 2rem; }
+.solo-card { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; }
+.solo-card > * { width: 100%; }
+.solo-card .grid-wrap { width: 100%; }
+.solo-top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.solo-top .word { text-align: left; }
+.pixel-grid.paintable { touch-action: none; cursor: crosshair; user-select: none; -webkit-user-select: none; }
+.pixel-grid.paintable .px:hover { outline: 3px solid var(--sun); outline-offset: -3px; }
+.palette { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4rem; }
+.swatch-btn {
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 3px solid var(--ink);
+  border-radius: 0.6rem;
+  box-shadow: 2px 2px 0 var(--ink);
+  cursor: pointer;
+  padding: 0;
+  font-size: 1.1rem;
+  transition: transform 0.1s;
+}
+.swatch-btn.eraser { background: repeating-conic-gradient(#ddd 0 25%, #fff 0 50%) 50% / 10px 10px; }
+.swatch-btn[aria-checked='true'] { transform: translateY(-4px) scale(1.12); box-shadow: 0 0 0 3px var(--paper), 0 0 0 6px var(--ink); }
+.solo-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; justify-content: center; }
+.inline-field { display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 600; font-size: 0.9rem; }
+.inline-field select { padding: 0.3rem 0.5rem; font-size: 0.95rem; }
+.solo-home { align-self: center; width: auto !important; }
+
 /* ---------- phones ---------- */
 @media (max-width: 700px) {
   /* Everything is sized in rem, so scaling the root font scales the whole UI with the screen width:
@@ -573,7 +609,8 @@ code { background: #f2eefc; padding: 1px 0.375rem; border-radius: 0.375rem; font
   /* keep the grid small enough that the dock never covers it */
   .pixel-grid { width: min(100%, max(13.75rem, calc(100svh - 20.625rem))); gap: 3px; padding: 4px; }
   .pixel-grid.dense { width: min(100%, max(15rem, calc(100svh - 18.75rem))); gap: 1px; padding: 3px; }
-  .px span { font-size: 0.6rem; top: 2px; left: 3px; }
+  .px span { font-size: 0.8rem; top: 3px; left: 4px; }
+  .pixel-grid.dense .px span { font-size: clamp(0.5rem, 2.3vw, 0.65rem); }
   .draw-log { max-height: 84px; font-size: 0.85rem; }
 
   .feed-card { display: contents; }
@@ -602,6 +639,12 @@ code { background: #f2eefc; padding: 1px 0.375rem; border-radius: 0.375rem; font
   .word .small { white-space: nowrap; }
   .toast { bottom: calc(6rem + var(--kb, 0px) + env(safe-area-inset-bottom)); }
   .gallery-row { justify-content: center; }
+  #soloView { margin-top: 0.25rem; }
+  /* keep palette + command box on screen under the grid */
+  #soloGrid { width: min(100%, max(13.75rem, calc(100svh - 23rem))); }
+  #soloGrid.dense { width: min(100%, max(15rem, calc(100svh - 21rem))); }
+  .swatch-btn { width: 2rem; height: 2rem; }
+  .inline-field select { font-size: 16px; }
   .art { width: 8.75rem; }
   .gallery-head h2 { font-size: 1.2rem; }
 }
