@@ -143,3 +143,51 @@ test('with 3 players the turn ends only after BOTH guessers get it; clear erases
   assert.ok(rs.feed.some((f) => f.text === 'Everyone got it! ⚡'));
   assert.equal(rs.players.find((p) => p.id === ids[d]).score, 50);
 });
+
+test('no-timer turns: order-based points, End turn, reveal time, gallery', async (t) => {
+  const socks = [0, 1, 2].map(() => connect(url, { transports: ['websocket'] }));
+  socks.forEach((s) => s.on('state', (st) => { s.last = st; }));
+  t.after(() => socks.forEach((s) => s.close()));
+  const ids = ['notimer-aaaaaaa', 'notimer-bbbbbbb', 'notimer-ccccccc'];
+
+  const { code } = await emit(socks[0], 'create_room', { name: 'A', playerId: ids[0] });
+  await emit(socks[1], 'join_room', { code, name: 'B', playerId: ids[1] });
+  await emit(socks[2], 'join_room', { code, name: 'C', playerId: ids[2] });
+  const configured = nextState(socks[0], (s) => s.settings.turnTime === 0 && s.settings.revealTime === 5);
+  socks[0].emit('update_settings', { turnTime: 0, revealTime: 5, rounds: 1 });
+  await configured;
+  const ready = nextState(socks[0], (s) => s.canStart);
+  socks.forEach((s) => s.emit('set_ready', { ready: true }));
+  await ready;
+
+  const drawing = nextState(socks[0], (s) => s.phase === 'drawing');
+  await emit(socks[0], 'start_game', null);
+  const st = await drawing;
+  assert.equal(st.game.noTimer, true);
+  assert.equal(st.game.remainingMs, null);
+
+  const d = ids.indexOf(st.game.drawerId);
+  const drawer = socks[d];
+  const [g1, g2] = socks.filter((_, i) => i !== d);
+  const notHostGuesser = [g1, g2].find((s) => s !== socks[0]);
+
+  await emit(drawer, 'draw', { text: 'red square 3 28' });
+  const secret = drawer.last.game.word;
+
+  // First correct guess gets 100 (no timer, first in), and the turn keeps going.
+  const first = g1 === notHostGuesser ? g1 : g2;
+  assert.equal((await emit(first, 'guess', { text: secret })).points, 100);
+  await new Promise((r) => setTimeout(r, 300)); // well past any timer — none should fire
+  assert.equal(drawer.last.phase, 'drawing');
+
+  // A non-host guesser can't end the turn; the drawer can.
+  if (notHostGuesser !== drawer) assert.equal((await emit(notHostGuesser, 'end_turn', null)).ok, false);
+  const reveal = nextState(drawer, (s) => s.phase === 'reveal');
+  assert.equal((await emit(drawer, 'end_turn', null)).ok, true);
+  const rs = await reveal;
+  assert.ok(rs.game.remainingMs <= 5000 && rs.game.remainingMs > 4000, 'reveal uses the 5s setting');
+  assert.equal(rs.game.gallery.length, 1);
+  assert.equal(rs.game.gallery[0].word, secret);
+  assert.equal(rs.game.gallery[0].grid.filter(Boolean).length, 9);
+  assert.equal(rs.game.gallery[0].artist, ['A', 'B', 'C'][d]);
+});

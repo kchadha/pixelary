@@ -1,172 +1,320 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pixelary</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 4'><rect width='2' height='2' fill='%23ff5f6d'/><rect x='2' width='2' height='2' fill='%23ffc371'/><rect y='2' width='2' height='2' fill='%2347e5bc'/><rect x='2' y='2' width='2' height='2' fill='%23845ef7'/></svg>" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <div class="bg-blobs" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pixelary</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 4'><rect width='2' height='2' fill='%23ff5f6d'/><rect x='2' width='2' height='2' fill='%23ffc371'/><rect y='2' width='2' height='2' fill='%2347e5bc'/><rect x='2' y='2' width='2' height='2' fill='%23845ef7'/></svg>"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bungee&family=Fredoka:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="bg-blobs" aria-hidden="true">
+      <span></span><span></span><span></span><span></span>
+    </div>
 
-  <header class="topbar">
-    <h1 class="logo" id="logo" aria-label="Pixelary">Pixelary</h1>
-    <button class="btn btn-small btn-ghost" id="rulesBtn" type="button">📜 Rules</button>
-  </header>
+    <header class="topbar">
+      <h1 class="logo" id="logo" aria-label="Pixelary">Pixelary</h1>
+      <button class="btn btn-small btn-ghost" id="rulesBtn" type="button">
+        📜 Rules
+      </button>
+    </header>
 
-  <main>
-    <!-- HOME / JOIN -->
-    <section class="view card tilt-left" id="homeView" hidden>
-      <h2 id="homeTitle">Draw with words. Guess with chaos.</h2>
-      <p class="sub" id="homeSub">Paint a pixel grid by shouting colors at it. Friends guess what it is.</p>
-      <form id="homeForm" class="stack" autocomplete="off">
-        <label class="field">
-          <span>Your name</span>
-          <input id="nameInput" maxlength="16" placeholder="e.g. Captain Pixel" required />
-        </label>
-        <button class="btn btn-big" id="homeSubmit" type="submit">✨ Create a game</button>
-      </form>
-      <details class="join-code" id="joinCodeBox">
-        <summary>Got a code instead?</summary>
-        <form id="codeForm" class="row" autocomplete="off">
-          <input id="codeInput" maxlength="4" placeholder="ABCD" />
-          <button class="btn" type="submit">Join</button>
+    <main>
+      <!-- HOME / JOIN -->
+      <section class="view card tilt-left" id="homeView" hidden>
+        <h2 id="homeTitle">Draw with words. Guess with chaos.</h2>
+        <p class="sub" id="homeSub">
+          Paint a pixel grid by shouting colors at it. Friends guess what it is.
+        </p>
+        <form id="homeForm" class="stack" autocomplete="off">
+          <label class="field">
+            <span>Your name</span>
+            <input
+              id="nameInput"
+              maxlength="16"
+              placeholder="e.g. Captain Pixel"
+              required
+            />
+          </label>
+          <button class="btn btn-big" id="homeSubmit" type="submit">
+            ✨ Create a game
+          </button>
         </form>
-      </details>
-      <p class="error" id="homeError" role="alert"></p>
-    </section>
-
-    <!-- LOBBY -->
-    <section class="view" id="lobbyView" hidden>
-      <div class="lobby-grid">
-        <div class="card tilt-left">
-          <h2>Room <span class="room-code" id="roomCode">----</span></h2>
-          <p class="sub">Send this link to your friends:</p>
-          <div class="row">
-            <input id="inviteLink" readonly />
-            <button class="btn" id="copyBtn" type="button">📋 Copy</button>
-          </div>
-          <h3>Players</h3>
-          <ul class="player-list" id="lobbyPlayers"></ul>
-          <button class="btn btn-big" id="readyBtn" type="button">I'm ready!</button>
-        </div>
-        <div class="card tilt-right">
-          <h2>Settings</h2>
-          <ul class="settings-summary" id="settingsSummary" hidden></ul>
-          <div id="settingsControls">
-          <label class="field">
-            <span>Rounds</span>
-            <select id="roundsSelect"></select>
-          </label>
-          <label class="field">
-            <span>Seconds per turn</span>
-            <select id="timeSelect"></select>
-          </label>
-          <label class="field">
-            <span>Grid size</span>
-            <select id="gridSelect"></select>
-          </label>
-          <label class="field">
-            <span>Word difficulty</span>
-            <select id="difficultySelect"></select>
-          </label>
-          </div>
-          <p class="sub small" id="settingsNote"></p>
-          <button class="btn btn-big btn-go" id="startBtn" type="button">🚀 Start game</button>
-          <p class="sub small" id="startNote"></p>
-        </div>
-      </div>
-    </section>
-
-    <!-- GAME -->
-    <section class="view" id="gameView" hidden>
-      <div class="game-grid">
-        <aside class="card scoreboard tilt-left">
-          <h3>Scores</h3>
-          <ul class="player-list" id="gamePlayers"></ul>
-        </aside>
-
-        <div class="card stage">
-          <div class="stage-top">
-            <span class="pill" id="roundPill">Round 1/2</span>
-            <span class="timer" id="timer">75</span>
-          </div>
-          <div class="word" id="wordBox"></div>
-          <div class="pixel-grid" id="pixelGrid"></div>
-
-          <div id="drawPanel" hidden>
-            <form id="drawForm" class="row" autocomplete="off">
-              <input id="drawInput" maxlength="120" placeholder='e.g. "lime square big 13"' />
-              <button class="btn btn-icon" id="micBtn" type="button" title="Speak a command" hidden>🎤</button>
-              <button class="btn" type="submit">Paint!</button>
-            </form>
-            <div class="draw-actions">
-              <p class="error" id="drawError" role="alert"></p>
-              <button class="btn btn-small btn-skip" id="skipBtn" type="button" title="Get a different word (the timer keeps running)">⏭️ Skip word</button>
-            </div>
-            <div class="chips" id="chips"></div>
-          </div>
-          <ol class="draw-log" id="drawLog"></ol>
-        </div>
-
-        <aside class="card feed-card tilt-right">
-          <h3>Guesses</h3>
-          <ul class="feed" id="feed"></ul>
-          <form id="guessForm" class="row" autocomplete="off">
-            <input id="guessInput" maxlength="60" placeholder="Type your guess…" />
-            <button class="btn" type="submit">Go</button>
+        <details class="join-code" id="joinCodeBox">
+          <summary>Got a code instead?</summary>
+          <form id="codeForm" class="row" autocomplete="off">
+            <input id="codeInput" maxlength="4" placeholder="ABCD" />
+            <button class="btn" type="submit">Join</button>
           </form>
-          <p class="guess-status" id="guessStatus" hidden></p>
-          <p class="error" id="guessError" role="alert"></p>
-        </aside>
-      </div>
-    </section>
+        </details>
+        <p class="error" id="homeError" role="alert"></p>
+      </section>
 
-    <!-- RESULTS -->
-    <section class="view card tilt-right" id="resultsView" hidden>
-      <h2>🏆 Final scores</h2>
-      <ol class="podium" id="podium"></ol>
-      <button class="btn btn-big btn-go" id="againBtn" type="button">🔁 Back to lobby</button>
-      <p class="sub small" id="againNote"></p>
-    </section>
-  </main>
+      <!-- LOBBY -->
+      <section class="view" id="lobbyView" hidden>
+        <div class="lobby-grid">
+          <div class="card tilt-left">
+            <h2>Room <span class="room-code" id="roomCode">----</span></h2>
+            <p class="sub">Send this link to your friends:</p>
+            <div class="row">
+              <input id="inviteLink" readonly />
+              <button class="btn" id="copyBtn" type="button">📋 Copy</button>
+            </div>
+            <h3>Players</h3>
+            <ul class="player-list" id="lobbyPlayers"></ul>
+            <button class="btn btn-big" id="readyBtn" type="button">
+              I'm ready!
+            </button>
+          </div>
+          <div class="card tilt-right">
+            <h2>Settings</h2>
+            <ul class="settings-summary" id="settingsSummary" hidden></ul>
+            <div id="settingsControls">
+              <label class="field">
+                <span>Rounds</span>
+                <select id="roundsSelect"></select>
+              </label>
+              <label class="field">
+                <span>Seconds per turn</span>
+                <select id="timeSelect"></select>
+              </label>
+              <label class="field">
+                <span>Show the answer for</span>
+                <select id="revealSelect"></select>
+              </label>
+              <label class="field">
+                <span>Grid size</span>
+                <select id="gridSelect"></select>
+              </label>
+              <label class="field">
+                <span>Word difficulty</span>
+                <select id="difficultySelect"></select>
+              </label>
+            </div>
+            <p class="sub small" id="settingsNote"></p>
+            <button class="btn btn-big btn-go" id="startBtn" type="button">
+              🚀 Start game
+            </button>
+            <p class="sub small" id="startNote"></p>
+          </div>
+        </div>
+      </section>
 
-  <!-- RULES -->
-  <dialog id="rulesDialog" class="card">
-    <h2>How to play</h2>
-    <ol class="rules">
-      <li>The host creates a game and shares the link. Everyone hits <b>Ready</b>, then the host starts.</li>
-      <li>Players take turns drawing a secret word on a <b>pixel grid</b> (8×8 by default; the host can pick 9×9, 16×16 or 17×17. Odd sizes have a true center cell, which makes things a bit easier), using words instead of a brush.</li>
-      <li>Type a command: <code>color [shape] [size] cells</code>. Cells are numbered from <b>1</b> in the top-left corner, left to right (up to 64 on 8×8).
-        <ul>
-          <li><code>red 7</code>: paint cell 7 red</li>
-          <li><code>blue all</code>: fill the whole grid (great for backgrounds)</li>
-          <li><code>lime square big 28</code>: a big lime square centered on 28</li>
-          <li><code>banana circle 20</code> / <code>banana ring 20</code>: a filled circle, or just its outline</li>
-          <li><code>black cells 1, 6, 11</code>: paint just those cells (use commas to stamp a shape on several cells: <code>red plus 10, 30</code>)</li>
-          <li><code>black line 1 to 57</code>: a straight line between two cells</li>
-          <li><code>green row 30</code> / <code>green col 3</code>: the whole row or column</li>
-        </ul>
-      </li>
-      <li><b>Shapes:</b> dot, square, box, circle, ring, plus, x, line, row, col, diamond, triangle. <b>Sizes:</b> small (3×3), big (5×5), huge (9×9), or a number: <code>beige square 3 50</code> is a 3×3 square on cell 50. Shapes stop at the edge of the grid.</li>
-      <li><b>Colors:</b> any color word works, even things like <i>lava</i>. Made-up words get a <i>random</i> color. 🎲</li>
-      <li><b>Oops?</b> Use <code>clear</code> as the color to erase cells (<code>clear 12</code>, <code>clear row 9</code>), or <code>clear all</code> to wipe the grid.</li>
-      <li>Stuck? The drawer can <b>skip</b> to a new word until someone guesses it. The timer keeps running.</li>
-      <li>Everyone else types guesses. Wrong guesses show up for everyone; right ones stay secret.</li>
-      <li><b>Scoring:</b> a correct guess earns 50–100 points (faster earns more). The drawer gets +25 for each person who guesses it.</li>
-      <li>The turn ends when time runs out or everyone has guessed it.</li>
-    </ol>
-    <form method="dialog"><button class="btn">Got it!</button></form>
-  </dialog>
+      <!-- GAME -->
+      <section class="view" id="gameView" hidden>
+        <div class="game-grid">
+          <aside class="card scoreboard tilt-left">
+            <h3>Scores</h3>
+            <ul class="player-list" id="gamePlayers"></ul>
+          </aside>
 
-  <div class="toast" id="toast" role="status"></div>
+          <div class="card stage">
+            <div class="stage-top">
+              <span class="pill" id="roundPill">Round 1/2</span>
+              <span class="timer" id="timer">75</span>
+            </div>
+            <div class="word" id="wordBox"></div>
+            <div class="pixel-grid" id="pixelGrid"></div>
+            <div class="turn-actions">
+              <button
+                class="btn btn-small btn-end"
+                id="endTurnBtn"
+                type="button"
+                hidden
+              >
+                🏁 End turn
+              </button>
+              <button
+                class="btn btn-small btn-save"
+                id="saveDrawingBtn"
+                type="button"
+                hidden
+              >
+                💾 Save drawing
+              </button>
+            </div>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js" defer></script>
-  <script src="app.js"></script>
-</body>
+            <div id="drawPanel" hidden>
+              <form id="drawForm" class="row" autocomplete="off">
+                <input
+                  id="drawInput"
+                  maxlength="120"
+                  placeholder='e.g. "lime square big 13"'
+                />
+                <button
+                  class="btn btn-icon"
+                  id="micBtn"
+                  type="button"
+                  title="Speak a command"
+                  hidden
+                >
+                  🎤
+                </button>
+                <button class="btn" type="submit">Paint!</button>
+              </form>
+              <div class="draw-actions">
+                <p class="error" id="drawError" role="alert"></p>
+                <button
+                  class="btn btn-small btn-skip"
+                  id="skipBtn"
+                  type="button"
+                  title="Get a different word (the timer keeps running)"
+                >
+                  ⏭️ Skip word
+                </button>
+              </div>
+              <div class="chips" id="chips"></div>
+            </div>
+            <ol class="draw-log" id="drawLog"></ol>
+          </div>
+
+          <aside class="card feed-card tilt-right">
+            <h3>Guesses</h3>
+            <ul class="feed" id="feed"></ul>
+            <form id="guessForm" class="row" autocomplete="off">
+              <input
+                id="guessInput"
+                maxlength="60"
+                placeholder="Type your guess…"
+              />
+              <button class="btn" type="submit">Go</button>
+            </form>
+            <p class="guess-status" id="guessStatus" hidden></p>
+            <p class="error" id="guessError" role="alert"></p>
+          </aside>
+        </div>
+      </section>
+
+      <!-- RESULTS -->
+      <section class="view card tilt-right" id="resultsView" hidden>
+        <h2>🏆 Final scores</h2>
+        <ol class="podium" id="podium"></ol>
+        <div id="galleryBox" hidden>
+          <div class="gallery-head">
+            <h2>🖼️ The gallery</h2>
+            <button
+              class="btn btn-small btn-save"
+              id="saveAllBtn"
+              type="button"
+            >
+              💾 Save all
+            </button>
+          </div>
+          <div id="gallery"></div>
+        </div>
+        <button class="btn btn-big btn-go" id="againBtn" type="button">
+          🔁 Back to lobby
+        </button>
+        <p class="sub small" id="againNote"></p>
+      </section>
+    </main>
+
+    <!-- RULES -->
+    <dialog id="rulesDialog" class="card">
+      <h2>How to play</h2>
+      Players take turns "drawing" a secret word on a <b>pixel grid</b>. But
+      here's the catch, they must use words to draw instead of a pencil.
+      <ol class="rules">
+        <li>
+          The host creates a game and shares the link. Everyone hits
+          <b>Ready</b>, then the host starts.
+        </li>
+        <li>
+          The <b>artist</b> gets a secret word to draw on a <b>pixel grid</b>.
+          The grid is 8×8 by default; but the the game host can pick 9×9, 16×16
+          or 17×17. Odd sizes have a true center cell, which makes things a bit
+          easier.
+        </li>
+        <li>
+          Instead of drawing with a pencil, Type a command:
+          <code>color [shape] [size] cells</code> (e.g. lime circle big 36).
+          Cells are numbered from <b>1</b> in the top-left corner, left to right
+          (up to 64 on 8×8).
+          <ul>
+            <li><code>red 7</code>: paint cell 7 red</li>
+            <li>
+              <code>blue all</code>: fill the whole grid (great for backgrounds)
+            </li>
+            <li>
+              <code>lime square big 28</code>: a big lime square centered on 28
+            </li>
+            <li>
+              <code>banana circle 20</code> / <code>banana ring 20</code>: a
+              filled circle, or just its outline
+            </li>
+            <li>
+              <code>black cells 1, 6, 11</code>: paint just those cells (use
+              commas to stamp a shape on several cells:
+              <code>red plus 10, 30</code>)
+            </li>
+            <li>
+              <code>black line 1 to 57</code>: a straight line between two cells
+            </li>
+            <li>
+              <code>green row 30</code> / <code>green col 3</code>: the whole
+              row or column
+            </li>
+          </ul>
+        </li>
+        <li>
+          <b>Shapes:</b> dot, square, box, circle, ring, plus, x, line, row,
+          col, diamond, triangle. <b>Sizes:</b> small (3×3), big (5×5), huge
+          (9×9), or a number: <code>beige square 3 50</code> is a 3×3 square on
+          cell 50. Shapes stop at the edge of the grid.
+        </li>
+        <li>
+          <b>Colors:</b> any color word works, even things like <i>lava</i>.
+          Made-up words get a <i>random</i> color. 🎲
+        </li>
+        <li>
+          <b>Oops?</b> Use <code>clear</code> as the color to erase cells (<code
+            >clear 12</code
+          >, <code>clear row 9</code>), or <code>clear all</code> to wipe the
+          grid.
+        </li>
+        <li>
+          Stuck? The drawer can <b>skip</b> to a new word until someone guesses
+          it. The timer keeps running.
+        </li>
+        <li>
+          Everyone else types guesses. Wrong guesses show up for everyone; right
+          ones stay secret.
+        </li>
+        <li>
+          <b>Scoring:</b> a correct guess earns 50–100 points (faster earns
+          more; with no timer, earlier guessers earn more). The drawer gets +25
+          for each person who guesses it.
+        </li>
+        <li>
+          With <b>no timer</b>, the turn ends when everyone has guessed, or when
+          the drawer or host hits <b>End turn</b>.
+        </li>
+        <li>
+          💾 Save any drawing during the reveal, or the whole gallery at the end
+          of the game.
+        </li>
+        <li>The turn ends when time runs out or everyone has guessed it.</li>
+      </ol>
+      <form method="dialog"><button class="btn">Got it!</button></form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"
+      defer
+    ></script>
+    <script src="art.js"></script>
+    <script src="app.js"></script>
+  </body>
 </html>

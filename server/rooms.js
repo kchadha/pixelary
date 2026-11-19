@@ -3,15 +3,21 @@ const { parseCommand } = require('./commandParser');
 const { pickWord } = require('./words');
 
 const AVATARS = ['🐸', '🦄', '🍕', '🐙', '🦖', '🌮', '🐝', '🍩', '🦊', '🐧', '🍉', '👾', '🦀', '🌈', '🐼', '🍄'];
-const REVEAL_MS = 10_000;
 const DISCONNECT_GRACE_MS = 45_000;
 const LOBBY_GRACE_MS = 5_000;
 const MAX_PLAYERS = 12;
 const MAX_FEED = 60;
 const MAX_LOG = 40;
 
-const DEFAULT_SETTINGS = { rounds: 2, turnTime: 75, difficulty: 'easy', gridSize: 8 };
-const ALLOWED = { rounds: [1, 2, 3, 4, 5], turnTime: [45, 60, 75, 90, 120], difficulty: ['easy', 'medium', 'hard', 'mix'], gridSize: [8, 9, 16, 17] };
+// turnTime 0 = no timer: the turn ends when everyone guesses or the drawer/host ends it.
+const DEFAULT_SETTINGS = { rounds: 2, turnTime: 75, revealTime: 10, difficulty: 'easy', gridSize: 8 };
+const ALLOWED = {
+  rounds: [1, 2, 3, 4, 5],
+  turnTime: [0, 45, 60, 75, 90, 120],
+  revealTime: [5, 10, 15, 20, 30],
+  difficulty: ['easy', 'medium', 'hard', 'mix'],
+  gridSize: [8, 9, 16, 17],
+};
 
 const rooms = new Map();
 
@@ -157,7 +163,7 @@ class Room {
     if (!this.canStart()) return { error: 'Need at least 2 players and everyone ready.' };
     for (const p of this.players.values()) p.score = 0;
     this.feed = [];
-    this.game = { gridSize: this.settings.gridSize, round: 0, turnQueue: [], drawerId: null, word: null, grid: [], log: [], guessed: new Map(), turnEndsAt: 0, turnNumber: 0 };
+    this.game = { gridSize: this.settings.gridSize, round: 0, turnQueue: [], drawerId: null, word: null, grid: [], log: [], guessed: new Map(), turnEndsAt: 0, turnNumber: 0, gallery: [] };
     this.system('🎬 Game on!');
     this.nextTurn();
     return { ok: true };
@@ -196,11 +202,12 @@ class Room {
     g.grid = Array(g.gridSize * g.gridSize).fill(null);
     g.log = [];
     g.guessed = new Map();
-    g.turnEndsAt = Date.now() + this.settings.turnTime * 1000;
+    const timed = this.settings.turnTime > 0;
+    g.turnEndsAt = timed ? Date.now() + this.settings.turnTime * 1000 : 0;
     this.phase = 'drawing';
     const drawer = this.players.get(g.drawerId);
     this.system(`🎨 ${drawer.avatar} ${drawer.name} is drawing!`);
-    this.timer = setTimeout(() => this.endTurn(), this.settings.turnTime * 1000);
+    if (timed) this.timer = setTimeout(() => this.endTurn(), this.settings.turnTime * 1000);
     this.broadcast();
   }
 
@@ -209,11 +216,20 @@ class Room {
     const g = this.game;
     if (!g || this.phase !== 'drawing') return;
     this.phase = 'reveal';
-    g.revealEndsAt = Date.now() + REVEAL_MS;
+    const revealMs = this.settings.revealTime * 1000;
+    g.revealEndsAt = Date.now() + revealMs;
     this.system(`The word was “${g.word}”`);
+    // Keep finished drawings (skipped words don't count) for the saveable gallery.
+    const artist = this.players.get(g.drawerId);
+    if (g.grid.some(Boolean)) {
+      g.gallery.push({
+        round: g.round, word: g.word, gridSize: g.gridSize, grid: [...g.grid],
+        artist: artist?.name || 'Someone', avatar: artist?.avatar || '🎨', guessedBy: g.guessed.size,
+      });
+    }
     this.timer = setTimeout(() => {
       if (this.checkEnoughPlayers()) this.nextTurn();
-    }, REVEAL_MS);
+    }, revealMs);
     this.broadcast();
   }
 
@@ -234,6 +250,17 @@ class Room {
     g.log.length = Math.min(g.log.length, MAX_LOG);
     this.broadcast();
     return result;
+  }
+
+  /** No-timer games: the drawer (or host) ends the turn when they're done. */
+  endTurnEarly(playerId) {
+    const g = this.game;
+    if (this.phase !== 'drawing' || !g) return { ok: false, error: 'Nothing to end right now.' };
+    if (playerId !== g.drawerId && playerId !== this.hostId) return { ok: false, error: 'Only the drawer or host can end the turn.' };
+    const p = this.players.get(playerId);
+    this.system(`🏁 ${p.name} ended the turn`);
+    this.endTurn();
+    return { ok: true };
   }
 
   /** Drawer swaps their word. Allowed until someone guesses; the timer keeps running. */
@@ -263,8 +290,10 @@ class Room {
     if (g.guessed.has(playerId)) return { error: 'You already got it — shh! 🤫' };
 
     if (normalizeGuess(raw) === normalizeGuess(g.word)) {
-      const timeLeft = Math.max(0, g.turnEndsAt - Date.now());
-      const pts = 50 + Math.round((50 * timeLeft) / (this.settings.turnTime * 1000));
+      // Timed: faster = more (50-100). No timer: earlier guessers get more (100, 80, 60, then 50).
+      const pts = this.settings.turnTime > 0
+        ? 50 + Math.round((50 * Math.max(0, g.turnEndsAt - Date.now())) / (this.settings.turnTime * 1000))
+        : Math.max(50, 100 - 20 * g.guessed.size);
       p.score += pts;
       const drawer = this.players.get(g.drawerId);
       if (drawer) drawer.score += 25;
@@ -332,7 +361,10 @@ class Room {
         youGuessed: g.guessed.has(playerId),
         canSkip: g.guessed.size === 0,
         turn: g.turnNumber,
-        remainingMs: this.phase === 'drawing' ? Math.max(0, g.turnEndsAt - now) : this.phase === 'reveal' ? Math.max(0, g.revealEndsAt - now) : 0,
+        noTimer: this.settings.turnTime === 0,
+        remainingMs: this.phase === 'drawing' ? (g.turnEndsAt ? Math.max(0, g.turnEndsAt - now) : null) : this.phase === 'reveal' ? Math.max(0, g.revealEndsAt - now) : 0,
+        // Finished drawings: sent when they can be saved (reveal + results).
+        gallery: this.phase === 'drawing' ? [] : g.gallery,
         turnTime: this.settings.turnTime,
       },
     };

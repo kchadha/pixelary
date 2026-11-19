@@ -93,7 +93,8 @@ main { padding: 0 20px 40px; max-width: 1200px; margin: 0 auto; }
 .tilt-left { transform: rotate(-1.2deg); }
 .tilt-right { transform: rotate(1deg); }
 
-#homeView, #resultsView { max-width: 520px; margin: 30px auto; }
+#homeView { max-width: 520px; margin: 30px auto; }
+#resultsView { max-width: 820px; margin: 30px auto; }
 
 h2 { margin: 0 0 8px; font-size: 1.7rem; }
 h3 { margin: 18px 0 8px; font-size: 1.2rem; }
@@ -300,6 +301,22 @@ input:disabled, select:disabled { opacity: 0.6; background: #f2eefc; }
 .draw-actions { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 .draw-actions .error { flex: 1; }
 .btn-skip { background: var(--c2); margin-top: 6px; }
+.turn-actions { display: flex; gap: 10px; justify-content: center; }
+.btn-end { background: var(--c1); color: #fff; }
+.btn-save { background: var(--c3); }
+
+/* results gallery */
+.gallery-head { display: flex; justify-content: space-between; align-items: center; margin-top: 22px; }
+.gallery-round { margin: 14px 0; }
+.gallery-round-head { display: flex; justify-content: space-between; align-items: center; }
+.gallery-round-head h3 { margin: 6px 0; }
+.gallery-row { display: flex; flex-wrap: wrap; gap: 14px; }
+.art { width: 170px; margin: 0; text-align: center; background: #fff; border: 3px solid var(--ink); border-radius: 14px; padding: 8px; box-shadow: 3px 3px 0 var(--ink); }
+.art:nth-child(odd) { transform: rotate(-1.5deg); }
+.art:nth-child(even) { transform: rotate(1.2deg); }
+.art canvas { width: 100%; height: auto; display: block; border-radius: 8px; }
+.art figcaption { margin-top: 6px; line-height: 1.2; }
+.art figcaption b { font-family: 'Bungee', sans-serif; font-weight: 400; color: var(--pink); display: block; }
 .chips { display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; margin-top: 4px; }
 .chip {
   font: inherit;

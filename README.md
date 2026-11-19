@@ -14,10 +14,12 @@ grumpy 1                      → 🎲 a random color in the top-left corner
 ## How to play
 
 1. The host creates a game and sends the invite link (`…/?room=ABCD`).
-2. Everyone joins and hits **Ready**. The host picks the settings (rounds, seconds per turn, grid size 8×8, 9×9, 16×16 or 17×17 (odd sizes have a true center cell, so centered shapes are easier), word difficulty: easy, medium, hard or mix it up) and starts the game.
+2. Everyone joins and hits **Ready**. The host picks the settings (rounds, seconds per turn or **no timer**, how long the answer is shown, grid size 8×8, 9×9, 16×16 or 17×17 (odd sizes have a true center cell, so centered shapes are easier), word difficulty: easy, medium, hard or mix it up) and starts the game.
 3. Players take turns drawing a secret word. Everyone else types guesses.
 4. A turn ends when time runs out or everyone has guessed it. The word is then shown for 10 seconds.
-5. Stuck with a word? The drawer can hit **⏭️ Skip word** for a new word and a blank grid, any time before someone guesses. The timer keeps running.
+5. **No-timer games:** a turn ends when everyone has guessed, or when the drawer or host hits **🏁 End turn**.
+6. **Save the art:** during the reveal, hit **💾 Save drawing** for a PNG of that picture. At the end, the gallery shows every drawing, with **Save round** and **Save all** buttons. Images include the Pixelary title, each word and the artist's name.
+7. Stuck with a word? The drawer can hit **⏭️ Skip word** for a new word and a blank grid, any time before someone guesses. The timer keeps running.
 
 ### Drawing commands
 
@@ -36,7 +38,7 @@ grumpy 1                      → 🎲 a random color in the top-left corner
 
 ### Scoring
 
-- **Guesser:** 50–100 points. The faster you guess, the more you get.
+- **Guesser:** 50–100 points. The faster you guess, the more you get. With no timer, it goes by order instead: 100, 80, 60, then 50.
 - **Drawer:** +25 for each player who guesses correctly.
 
 Wrong guesses are shown to everyone. Correct guesses are never shown.
@@ -73,7 +75,7 @@ server/
   commandParser.js  "lime square big 13" → color + cells
   colors.js         color interpreter (word → hex)
   words.js          random word picker (words.json)
-public/             static client (index.html, app.js, style.css)
+public/             static client (index.html, app.js, art.js for PNG export, style.css)
 test/               node:test unit tests + end-to-end socket test
 ```
 

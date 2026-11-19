@@ -95,8 +95,8 @@
     socket.emit('set_ready', { ready: !me?.ready });
   });
   const sendSettings = () =>
-    socket.emit('update_settings', { rounds: Number($('roundsSelect').value), turnTime: Number($('timeSelect').value), difficulty: $('difficultySelect').value, gridSize: Number($('gridSelect').value) });
-  for (const id of ['roundsSelect', 'timeSelect', 'difficultySelect', 'gridSelect']) $(id).addEventListener('change', sendSettings);
+    socket.emit('update_settings', { rounds: Number($('roundsSelect').value), turnTime: Number($('timeSelect').value), difficulty: $('difficultySelect').value, gridSize: Number($('gridSelect').value), revealTime: Number($('revealSelect').value) });
+  for (const id of ['roundsSelect', 'timeSelect', 'revealSelect', 'difficultySelect', 'gridSelect']) $(id).addEventListener('change', sendSettings);
   $('startBtn').addEventListener('click', () => socket.emit('start_game', null, (res) => res?.error && toast(res.error)));
   $('againBtn').addEventListener('click', () => socket.emit('play_again'));
 
@@ -131,6 +131,32 @@
       $('drawInput').value = '';
     });
   }
+  $('endTurnBtn').addEventListener('click', () => {
+    socket.emit('end_turn', null, (res) => { if (!res?.ok) toast(res?.error || 'Could not end the turn'); });
+  });
+  $('saveDrawingBtn').addEventListener('click', () => {
+    const art = currentArt();
+    if (art) PixelArt.save([art], `Round ${art.round}`, `pixelary-${PixelArt.slug(art.word)}.png`);
+  });
+  $('saveAllBtn').addEventListener('click', () => {
+    const all = state?.game?.gallery || [];
+    if (all.length) PixelArt.save(all, `${all.length} masterpiece${all.length === 1 ? '' : 's'}`, 'pixelary-gallery.png');
+  });
+  $('gallery').addEventListener('click', (e) => {
+    const round = Number(e.target.closest('[data-round]')?.dataset.round);
+    if (!round) return;
+    const arts = state.game.gallery.filter((a) => a.round === round);
+    PixelArt.save(arts, `Round ${round}`, `pixelary-round-${round}.png`);
+  });
+
+  /** The drawing from the turn being revealed right now (if anything was drawn). */
+  function currentArt() {
+    const g = state?.game;
+    if (!g || state.phase !== 'reveal') return null;
+    const last = g.gallery[g.gallery.length - 1];
+    return last && last.word === g.word ? last : null;
+  }
+
   $('skipBtn').addEventListener('click', () => {
     socket.emit('skip_word', null, (res) => {
       if (!res?.ok) return toast(res?.error || 'Could not skip');
@@ -214,13 +240,15 @@
       if (isHost) {
         fillSelect($('roundsSelect'), state.allowed.rounds, state.settings.rounds);
         fillSelect($('timeSelect'), state.allowed.turnTime, state.settings.turnTime);
+        fillSelect($('revealSelect'), state.allowed.revealTime, state.settings.revealTime);
         fillSelect($('difficultySelect'), state.allowed.difficulty, state.settings.difficulty);
         fillSelect($('gridSelect'), state.allowed.gridSize, state.settings.gridSize);
       } else {
         const st = state.settings;
         $('settingsSummary').innerHTML =
           `<li><span>Rounds</span><b>${st.rounds}</b></li>` +
-          `<li><span>Seconds per turn</span><b>${st.turnTime}</b></li>` +
+          `<li><span>Seconds per turn</span><b>${st.turnTime ? st.turnTime : 'no timer'}</b></li>` +
+          `<li><span>Show the answer for</span><b>${st.revealTime} seconds</b></li>` +
           `<li><span>Grid size</span><b>${gridLabel(st.gridSize)}</b></li>` +
           `<li><span>Word difficulty</span><b>${st.difficulty === 'mix' ? 'mix it up' : st.difficulty}</b></li>`;
       }
@@ -240,6 +268,7 @@
       $('podium').innerHTML = sorted
         .map((p, i) => `<li style="--c:${CHAOS[i % CHAOS.length]}"><span class="medal">${medals[i] || '🎈'}</span><span class="avatar">${p.avatar}</span><span class="pname">${esc(p.name)}</span><span class="score">${p.score}</span></li>`)
         .join('');
+      renderGallery(state.game?.gallery || []);
       $('againBtn').hidden = !isHost;
       $('againNote').textContent = isHost ? '' : 'Waiting for the host…';
       if (!render.celebrated) { burst(250); render.celebrated = true; }
@@ -304,6 +333,8 @@
 
     $('drawPanel').hidden = !(isDrawer && state.phase === 'drawing');
     $('skipBtn').hidden = !g.canSkip; // gone once someone has guessed
+    $('endTurnBtn').hidden = !(g.noTimer && state.phase === 'drawing' && (isDrawer || isHost));
+    $('saveDrawingBtn').hidden = !currentArt();
     const canGuess = state.phase === 'drawing' && !isDrawer && !g.youGuessed;
     $('guessForm').hidden = !canGuess;
     $('guessStatus').hidden = canGuess;
@@ -320,6 +351,28 @@
       .join('');
 
     renderFeed();
+  }
+
+  function renderGallery(gallery) {
+    $('galleryBox').hidden = !gallery.length;
+    const key = gallery.map((a) => a.word).join('|');
+    if (renderGallery.key === key) return; // don't rebuild canvases on every update
+    renderGallery.key = key;
+    const rounds = [...new Set(gallery.map((a) => a.round))];
+    $('gallery').innerHTML = rounds
+      .map((r) => `<section class="gallery-round"><div class="gallery-round-head"><h3>Round ${r}</h3>` +
+        `<button class="btn btn-small btn-save" type="button" data-round="${r}">💾 Save round ${r}</button></div>` +
+        `<div class="gallery-row" data-row="${r}"></div></section>`)
+      .join('');
+    gallery.forEach((art) => {
+      const fig = document.createElement('figure');
+      fig.className = 'art';
+      fig.appendChild(PixelArt.thumbnail(art));
+      const cap = document.createElement('figcaption');
+      cap.innerHTML = `<b>${esc(art.word)}</b>by ${art.avatar} ${esc(art.artist)}`;
+      fig.appendChild(cap);
+      $('gallery').querySelector(`[data-row="${art.round}"]`).appendChild(fig);
+    });
   }
 
   function renderFeed() {
@@ -354,7 +407,12 @@
   }
 
   function fillSelect(sel, options, value) {
-    const label = (o) => (o === 'mix' ? 'mix it up' : sel.id === 'gridSelect' ? gridLabel(o) : o);
+    const label = (o) =>
+      o === 'mix' ? 'mix it up'
+        : sel.id === 'gridSelect' ? gridLabel(o)
+          : sel.id === 'timeSelect' && o === 0 ? 'no timer ♾️'
+            : sel.id === 'revealSelect' ? `${o} seconds`
+              : o;
     if (sel.options.length !== options.length) sel.innerHTML = options.map((o) => `<option value="${o}">${label(o)}</option>`).join('');
     if (document.activeElement !== sel) sel.value = String(value);
   }
@@ -362,8 +420,13 @@
   // timer tick
   setInterval(() => {
     if (!state?.game || (state.phase !== 'drawing' && state.phase !== 'reveal')) return;
-    const s = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
     const t = $('timer');
+    if (state.phase === 'drawing' && state.game.noTimer) {
+      t.textContent = '∞';
+      t.classList.remove('urgent');
+      return;
+    }
+    const s = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
     t.textContent = state.phase === 'reveal' ? `next in ${s}` : s;
     t.classList.toggle('urgent', state.phase === 'drawing' && s <= 10);
   }, 250);

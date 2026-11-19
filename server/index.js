@@ -51,6 +51,7 @@ io.on('connection', (socket) => {
   socket.on('start_game', (_data, ack) => safeAck(ack)(room ? room.start(playerId) : { error: 'Not in a room.' }));
   socket.on('play_again', () => room?.playAgain(playerId));
   socket.on('draw', ({ text } = {}, ack) => safeAck(ack)(room ? room.draw(playerId, text) : { ok: false, error: 'Not in a room.' }));
+  socket.on('end_turn', (_data, ack) => safeAck(ack)(room ? room.endTurnEarly(playerId) : { ok: false, error: 'Not in a room.' }));
   socket.on('skip_word', (_data, ack) => safeAck(ack)(room ? room.skip(playerId) : { ok: false, error: 'Not in a room.' }));
   socket.on('guess', ({ text } = {}, ack) => safeAck(ack)((room && room.guess(playerId, text)) || {}));
 
