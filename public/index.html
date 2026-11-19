@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <title>Pixelary</title>
     <link
       rel="icon"
@@ -57,6 +60,9 @@
           </form>
         </details>
         <p class="error" id="homeError" role="alert"></p>
+        <a class="btn btn-big btn-go" id="homeBtn" href="./" hidden>
+          🏠 Back to main page
+        </a>
       </section>
 
       <!-- LOBBY -->
@@ -118,21 +124,38 @@
           </aside>
 
           <div class="card stage">
+            <!-- Turn bar: round, timer and the drawer's turn buttons -->
             <div class="stage-top">
               <span class="pill" id="roundPill">Round 1/2</span>
-              <span class="timer" id="timer">75</span>
+              <div class="stage-top-actions">
+                <button
+                  class="btn btn-small btn-skip"
+                  id="skipBtn"
+                  type="button"
+                  title="Get a different word (the timer keeps running)"
+                  hidden
+                >
+                  ⏭️ Skip
+                </button>
+                <button
+                  class="btn btn-small btn-end"
+                  id="endTurnBtn"
+                  type="button"
+                  hidden
+                >
+                  🏁 End turn
+                </button>
+                <span class="timer" id="timer">75</span>
+              </div>
             </div>
+            <div class="pause-banner" id="pauseBanner" role="status" hidden></div>
             <div class="word" id="wordBox"></div>
-            <div class="pixel-grid" id="pixelGrid"></div>
+            <div class="grid-wrap">
+              <div class="pixel-grid" id="pixelGrid"></div>
+              <!-- Mobile: short-lived guess bubbles float over the grid -->
+              <div class="guess-bubbles" id="guessBubbles" aria-hidden="true"></div>
+            </div>
             <div class="turn-actions">
-              <button
-                class="btn btn-small btn-end"
-                id="endTurnBtn"
-                type="button"
-                hidden
-              >
-                🏁 End turn
-              </button>
               <button
                 class="btn btn-small btn-save"
                 id="saveDrawingBtn"
@@ -143,36 +166,36 @@
               </button>
             </div>
 
-            <div id="drawPanel" hidden>
-              <form id="drawForm" class="row" autocomplete="off">
-                <input
-                  id="drawInput"
-                  maxlength="120"
-                  placeholder='e.g. "lime square big 13"'
-                />
-                <button
-                  class="btn btn-icon"
-                  id="micBtn"
-                  type="button"
-                  title="Speak a command"
-                  hidden
-                >
-                  🎤
-                </button>
-                <button class="btn" type="submit">Paint!</button>
-              </form>
-              <div class="draw-actions">
+            <!-- Drawer's command box. On phones it moves into the bottom dock. -->
+            <div class="draw-slot" id="drawSlot">
+              <div id="drawControls" hidden>
+                <form id="drawForm" class="row" autocomplete="off">
+                  <input
+                    id="drawInput"
+                    maxlength="120"
+                    placeholder='e.g. "lime square big 13"'
+                    enterkeyhint="send"
+                    autocapitalize="off"
+                  />
+                  <button
+                    class="btn btn-icon"
+                    id="micBtn"
+                    type="button"
+                    title="Speak a command"
+                    hidden
+                  >
+                    🎤
+                  </button>
+                  <button class="btn" type="submit">Paint!</button>
+                </form>
                 <p class="error" id="drawError" role="alert"></p>
-                <button
-                  class="btn btn-small btn-skip"
-                  id="skipBtn"
-                  type="button"
-                  title="Get a different word (the timer keeps running)"
-                >
-                  ⏭️ Skip word
-                </button>
               </div>
-              <div class="chips" id="chips"></div>
+            </div>
+            <div id="drawPanel" hidden>
+              <details class="cheat" id="cheatSheet" open>
+                <summary>📖 Cheat sheet</summary>
+                <div class="chips" id="chips"></div>
+              </details>
             </div>
             <ol class="draw-log" id="drawLog"></ol>
           </div>
@@ -180,19 +203,30 @@
           <aside class="card feed-card tilt-right">
             <h3>Guesses</h3>
             <ul class="feed" id="feed"></ul>
-            <form id="guessForm" class="row" autocomplete="off">
-              <input
-                id="guessInput"
-                maxlength="60"
-                placeholder="Type your guess…"
-              />
-              <button class="btn" type="submit">Go</button>
-            </form>
-            <p class="guess-status" id="guessStatus" hidden></p>
-            <p class="error" id="guessError" role="alert"></p>
+            <!-- Guess box. On phones it moves into the bottom dock. -->
+            <div class="guess-slot" id="guessSlot">
+              <div id="guessControls">
+                <form id="guessForm" class="row" autocomplete="off">
+                  <input
+                    id="guessInput"
+                    maxlength="60"
+                    placeholder="Type your guess…"
+                    enterkeyhint="send"
+                  />
+                  <button class="btn" type="submit">Go</button>
+                </form>
+                <p class="guess-status" id="guessStatus" hidden></p>
+                <p class="error" id="guessError" role="alert"></p>
+              </div>
+            </div>
           </aside>
         </div>
+        <!-- Phones: input dock pinned to the bottom of the screen -->
+        <div class="dock" id="dock"></div>
       </section>
+
+      <!-- Comic "event" bubble for correct guesses -->
+      <div class="comic" id="comic" aria-live="polite"></div>
 
       <!-- RESULTS -->
       <section class="view card tilt-right" id="resultsView" hidden>
@@ -297,6 +331,11 @@
         <li>
           With <b>no timer</b>, the turn ends when everyone has guessed, or when
           the drawer or host hits <b>End turn</b>.
+        </li>
+        <li>
+          If someone's connection drops (say their phone locks), the game
+          <b>pauses for up to 2 minutes</b> and picks up where it left off when
+          they're back.
         </li>
         <li>
           💾 Save any drawing during the reveal, or the whole gallery at the end

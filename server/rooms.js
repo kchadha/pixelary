@@ -3,7 +3,10 @@ const { parseCommand } = require('./commandParser');
 const { pickWord } = require('./words');
 
 const AVATARS = ['🐸', '🦄', '🍕', '🐙', '🦖', '🌮', '🐝', '🍩', '🦊', '🐧', '🍉', '👾', '🦀', '🌈', '🐼', '🍄'];
-const DISCONNECT_GRACE_MS = 45_000;
+// If a game drops below 2 connected players (e.g. a phone locks), it pauses this long
+// waiting for them to come back. Mid-game, disconnected players are kept for the same time.
+const PAUSE_MS = Number(process.env.PIXELARY_PAUSE_MS) || 120_000;
+const DISCONNECT_GRACE_MS = PAUSE_MS + 5_000; // a bit longer, so the pause's own give-up runs first
 const LOBBY_GRACE_MS = 5_000;
 const MAX_PLAYERS = 12;
 const MAX_FEED = 60;
@@ -67,6 +70,7 @@ class Room {
       p.connected = true;
       p.name = cleanName(name) || p.name;
       clearTimeout(p.dropTimer);
+      this.maybeResume(p);
       return p;
     }
     if (this.players.size >= MAX_PLAYERS) return { error: 'This room is full.' };
@@ -78,6 +82,7 @@ class Room {
     if (!this.hostId) this.hostId = playerId;
     if (this.phase !== 'lobby') p.ready = true;
     this.system(`${p.avatar} ${p.name} joined the chaos`);
+    this.maybeResume(p);
     return p;
   }
 
@@ -89,12 +94,15 @@ class Room {
     // Short grace in the lobby (survives a page refresh), longer mid-game.
     const grace = this.phase === 'lobby' ? LOBBY_GRACE_MS : DISCONNECT_GRACE_MS;
     p.dropTimer = setTimeout(() => this.removePlayer(playerId), grace);
+    p.dropTimer.unref?.(); // housekeeping timers shouldn't keep the process alive on their own
+    // Too few left to play (e.g. 2-player game, a phone locked): pause, don't end or skip.
+    if (!this.checkEnoughPlayers()) return this.broadcast();
     if (this.game && this.game.drawerId === playerId && this.phase === 'drawing') {
       this.system(`${p.name} (the drawer) vanished! Skipping…`);
       this.endTurn();
       return;
     }
-    this.checkEnoughPlayers() && this.checkAllGuessed();
+    this.checkAllGuessed();
     this.broadcast();
   }
 
@@ -111,6 +119,14 @@ class Room {
       if (next) this.system(`👑 ${this.players.get(next).name} is the new host`);
     }
     if (this.players.size === 0) return this.destroy();
+    if (this.game?.paused) {
+      // Paused and now too few people left to ever resume: wrap up on the results screen.
+      if (this.players.size < 2) {
+        this.game.paused = null;
+        return this.finish();
+      }
+      return this.broadcast();
+    }
     if (this.game && this.game.drawerId === playerId && this.phase === 'drawing') return this.endTurn();
     if (this.checkEnoughPlayers()) this.checkAllGuessed();
     this.broadcast();
@@ -120,17 +136,87 @@ class Room {
     return this.order.map((id) => this.players.get(id)).filter((p) => p && p.connected);
   }
 
-  /** Returns false (and returns to lobby) if a running game drops below 2 players. */
+  /**
+   * Returns false if a running game can't continue right now. Fewer than 2 *connected*
+   * players but someone may still come back → pause. Fewer than 2 in the room → lobby.
+   */
   checkEnoughPlayers() {
     if (this.phase === 'lobby' || this.phase === 'results') return true;
+    if (this.game?.paused) return false;
     if (this.connectedPlayers().length >= 2) return true;
+    if (this.players.size >= 2) {
+      this.pause();
+      return false;
+    }
     this.system('Not enough players left — back to the lobby!');
     this.toLobby();
     return false;
   }
 
+  // ---------- pause / resume ----------
+  pause() {
+    const g = this.game;
+    if (!g || g.paused) return;
+    clearTimeout(this.timer);
+    const now = Date.now();
+    let remainingMs = null;
+    if (this.phase === 'drawing' && g.turnEndsAt) remainingMs = Math.max(0, g.turnEndsAt - now);
+    if (this.phase === 'reveal') remainingMs = Math.max(0, g.revealEndsAt - now);
+    g.paused = { endsAt: now + PAUSE_MS, remainingMs };
+    const names = this.awayPlayers().map((p) => p.name).join(' & ');
+    this.system(`⏸️ Paused — waiting for ${names} to come back…`);
+    clearTimeout(this.pauseTimer);
+    this.pauseTimer = setTimeout(() => this.giveUp(), PAUSE_MS);
+    this.pauseTimer.unref?.();
+  }
+
+  /** Someone (re)joined: if the game was paused and we have 2 connected again, pick up where we left off. */
+  maybeResume(p) {
+    const g = this.game;
+    if (!g?.paused || this.connectedPlayers().length < 2) return;
+    clearTimeout(this.pauseTimer);
+    const { remainingMs } = g.paused;
+    g.paused = null;
+    const now = Date.now();
+    if (this.phase === 'drawing' && remainingMs !== null) {
+      g.turnEndsAt = now + remainingMs;
+      this.timer = setTimeout(() => this.endTurn(), remainingMs);
+    } else if (this.phase === 'reveal') {
+      g.revealEndsAt = now + remainingMs;
+      this.timer = setTimeout(() => { if (this.checkEnoughPlayers()) this.nextTurn(); }, remainingMs);
+    }
+    this.system(`▶️ ${p.name} is back! Game on.`);
+    this.broadcast();
+  }
+
+  /** Nobody came back in time: end the game on the results screen (scores + gallery survive). */
+  giveUp() {
+    const g = this.game;
+    if (!g?.paused) return;
+    const away = this.awayPlayers();
+    this.system(`${away.map((p) => p.name).join(' & ')} didn't make it back`);
+    g.paused = null;
+    for (const p of away) {
+      clearTimeout(p.dropTimer);
+      this.players.delete(p.id);
+      this.order = this.order.filter((id) => id !== p.id);
+      if (this.hostId === p.id) this.hostId = this.order[0] || null;
+    }
+    if (!this.players.size) return this.destroy();
+    this.finish();
+  }
+
+  awayPlayers() {
+    return this.order.map((id) => this.players.get(id)).filter((p) => p && !p.connected);
+  }
+
+  pausedError() {
+    return this.game?.paused ? { ok: false, error: `Game paused — waiting for ${this.awayPlayers().map((p) => p.name).join(' & ')}` } : null;
+  }
+
   destroy() {
     clearTimeout(this.timer);
+    clearTimeout(this.pauseTimer);
     for (const p of this.players.values()) clearTimeout(p.dropTimer);
     rooms.delete(this.code);
   }
@@ -171,6 +257,7 @@ class Room {
 
   toLobby() {
     clearTimeout(this.timer);
+    clearTimeout(this.pauseTimer);
     this.phase = 'lobby';
     this.game = null;
     for (const p of this.players.values()) p.ready = false;
@@ -235,12 +322,15 @@ class Room {
 
   finish() {
     clearTimeout(this.timer);
+    clearTimeout(this.pauseTimer);
     this.phase = 'results';
     this.system('🏁 Game over!');
     this.broadcast();
   }
 
   draw(playerId, text) {
+    const paused = this.pausedError();
+    if (paused) return paused;
     const g = this.game;
     if (this.phase !== 'drawing' || !g || g.drawerId !== playerId) return { ok: false, error: "It's not your turn to draw." };
     const result = parseCommand(String(text).slice(0, 120), { gridSize: g.gridSize });
@@ -254,6 +344,8 @@ class Room {
 
   /** No-timer games: the drawer (or host) ends the turn when they're done. */
   endTurnEarly(playerId) {
+    const paused = this.pausedError();
+    if (paused) return paused;
     const g = this.game;
     if (this.phase !== 'drawing' || !g) return { ok: false, error: 'Nothing to end right now.' };
     if (playerId !== g.drawerId && playerId !== this.hostId) return { ok: false, error: 'Only the drawer or host can end the turn.' };
@@ -265,6 +357,8 @@ class Room {
 
   /** Drawer swaps their word. Allowed until someone guesses; the timer keeps running. */
   skip(playerId) {
+    const paused = this.pausedError();
+    if (paused) return paused;
     const g = this.game;
     if (this.phase !== 'drawing' || !g || g.drawerId !== playerId) return { ok: false, error: "It's not your turn to draw." };
     if (g.guessed.size) return { ok: false, error: 'Too late — someone already guessed it!' };
@@ -286,6 +380,7 @@ class Room {
       this.pushFeed({ type: 'chat', name: p.name, avatar: p.avatar, text: raw });
       return this.broadcast();
     }
+    if (g.paused) return this.pausedError();
     if (playerId === g.drawerId) return { error: 'Drawers draw, they don’t guess! 🤐' };
     if (g.guessed.has(playerId)) return { error: 'You already got it — shh! 🤫' };
 
@@ -299,7 +394,7 @@ class Room {
       if (drawer) drawer.score += 25;
       g.guessed.set(playerId, pts);
       this.pushFeed({ type: 'correct', name: p.name, avatar: p.avatar, text: `guessed it! +${pts}` });
-      this.io.to(this.code).emit('celebrate', { playerId, name: p.name });
+      this.io.to(this.code).emit('celebrate', { playerId, name: p.name, avatar: p.avatar, points: pts });
       if (!this.checkAllGuessed()) this.broadcast();
       return { correct: true, points: pts };
     }
@@ -359,6 +454,9 @@ class Room {
         grid: g.grid,
         log: g.log,
         youGuessed: g.guessed.has(playerId),
+        paused: g.paused
+          ? { waitingFor: this.awayPlayers().map((p) => ({ name: p.name, avatar: p.avatar })), remainingMs: Math.max(0, g.paused.endsAt - now) }
+          : null,
         canSkip: g.guessed.size === 0,
         turn: g.turnNumber,
         noTimer: this.settings.turnTime === 0,

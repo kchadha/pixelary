@@ -16,26 +16,80 @@
   let state = null;
   let deadline = 0;
   let lastTurn = null;
+  let pauseDeadline = 0;
+  let lastFeedT = null; // newest feed entry already shown as a bubble
+
+  // ---------- phone layout ----------
+  // On narrow screens the guess / command boxes live in a dock pinned to the bottom,
+  // so they're always in view (and sit right above the on-screen keyboard).
+  const phone = matchMedia('(max-width: 700px)');
+  const isTouch = matchMedia('(pointer: coarse)');
+  function placeInputs() {
+    const dock = $('dock');
+    if (phone.matches) {
+      dock.append($('drawControls'), $('guessControls'));
+      $('cheatSheet').open = false;
+    } else {
+      $('drawSlot').append($('drawControls'));
+      $('guessSlot').append($('guessControls'));
+      $('cheatSheet').open = true;
+    }
+  }
+  phone.addEventListener('change', placeInputs);
+  placeInputs();
+  // iOS Safari doesn't resize the page for the keyboard; lift the dock by hand.
+  if (window.visualViewport) {
+    const lift = () => {
+      const vv = window.visualViewport;
+      const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      document.documentElement.style.setProperty('--kb', `${kb}px`);
+    };
+    visualViewport.addEventListener('resize', lift);
+    visualViewport.addEventListener('scroll', lift);
+  }
 
   // ---------- rainbow logo ----------
   $('logo').innerHTML = [...'Pixelary'].map((ch, i) => `<span style="color:${CHAOS[i % CHAOS.length]};animation-delay:${i * 0.08}s">${ch}</span>`).join('');
 
   // ---------- socket ----------
-  const socket = io();
+  // closeOnBeforeunload: leaving/reloading the page tells the server right away.
+  const socket = io({ closeOnBeforeunload: true });
   socket.on('connect', () => {
     // Re-join automatically after a refresh / reconnect.
     const name = localStorage.getItem('pixelary-name');
     if (roomCode && name && sessionStorage.getItem('pixelary-room') === roomCode) join(roomCode, name);
   });
-  socket.on('state', (s) => { state = s; render(); });
-  socket.on('celebrate', ({ playerId: who }) => burst(who === playerId ? 160 : 60));
+  socket.on('state', (s) => { state = s; render(); keepAwake(); });
+  socket.on('celebrate', ({ playerId: who, name, avatar, points }) => {
+    burst(who === playerId ? 160 : 60);
+    comic(who === playerId ? 'YOU GOT IT!' : `${name} GOT IT!`, `${avatar} +${points}`);
+  });
   socket.on('disconnect', () => toast('Lost connection… reconnecting 🔌'));
+
+  // ---------- phone lock resilience ----------
+  // Keep the screen awake while in a room so an idle phone doesn't auto-lock mid-game.
+  // (Wake locks are dropped whenever the tab is hidden, so grab it again on return.)
+  let wakeLock = null;
+  async function keepAwake() {
+    if (!('wakeLock' in navigator) || !state || document.visibilityState !== 'visible' || wakeLock) return;
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch { /* denied (e.g. low battery mode): the pause/resume below still covers us */ }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    // Phone unlocked / tab back: reconnect now instead of waiting for the retry backoff.
+    if (!socket.connected) socket.connect();
+    keepAwake();
+  });
 
   function join(code, name) {
     socket.emit('join_room', { code, name, playerId }, (res) => {
       if (!res.ok) {
         sessionStorage.removeItem('pixelary-room');
         showView('homeView');
+        if (code === roomCode) return showNotFound(res.error); // came from an invite link
         setupHome();
         $('homeError').textContent = res.error;
         return;
@@ -51,6 +105,17 @@
   }
 
   // ---------- home ----------
+  /** The invite link's game is gone (ended, or the server restarted): offer a way back. */
+  function showNotFound(reason) {
+    $('homeTitle').textContent = 'That game has vanished 👻';
+    $('homeSub').textContent = `${reason || `No game found with code ${roomCode}.`} It may have ended, or the server restarted. Start a fresh one from the main page!`;
+    $('homeForm').hidden = true;
+    $('joinCodeBox').hidden = true;
+    $('homeError').textContent = '';
+    $('homeBtn').href = location.pathname; // same page, without ?room=
+    $('homeBtn').hidden = false;
+  }
+
   function setupHome() {
     $('nameInput').value = localStorage.getItem('pixelary-name') || '';
     if (roomCode) {
@@ -331,18 +396,30 @@
       .map((l) => `<li><span class="swatch ${l.hex ? '' : 'erased'}" style="${l.hex ? `background:${esc(l.hex)}` : ''}"></span>${esc(l.text)}${l.known ? '' : ' 🎲'}</li>`)
       .join('');
 
-    $('drawPanel').hidden = !(isDrawer && state.phase === 'drawing');
-    $('skipBtn').hidden = !g.canSkip; // gone once someone has guessed
-    $('endTurnBtn').hidden = !(g.noTimer && state.phase === 'drawing' && (isDrawer || isHost));
+    // Paused (someone's connection dropped): banner + countdown, and nothing to type into.
+    const paused = g.paused;
+    $('pauseBanner').hidden = !paused;
+    if (paused) {
+      pauseDeadline = Date.now() + paused.remainingMs;
+      const who = paused.waitingFor.map((p) => `${p.avatar} ${esc(p.name)}`).join(' & ') || 'a player';
+      $('pauseBanner').innerHTML = `⏸️ Paused — waiting for <b>${who}</b> to come back… <span class="pause-count" id="pauseCount"></span>`;
+    }
+    const drawing = isDrawer && state.phase === 'drawing' && !paused;
+    $('drawPanel').hidden = !drawing;
+    $('drawControls').hidden = !drawing;
+    $('skipBtn').hidden = !(drawing && g.canSkip); // gone once someone has guessed
+    $('endTurnBtn').hidden = !(g.noTimer && state.phase === 'drawing' && !paused && (isDrawer || isHost));
     $('saveDrawingBtn').hidden = !currentArt();
-    const canGuess = state.phase === 'drawing' && !isDrawer && !g.youGuessed;
+    const canGuess = state.phase === 'drawing' && !isDrawer && !g.youGuessed && !paused;
     $('guessForm').hidden = !canGuess;
     $('guessStatus').hidden = canGuess;
     $('guessStatus').textContent =
-      state.phase === 'reveal' ? 'Next turn coming up…' : isDrawer ? 'You’re drawing! Watch the guesses roll in 👀' : '✅ You got it! Shhh 🤫';
+      paused ? `⏸️ Paused — waiting for ${paused.waitingFor.map((p) => p.name).join(' & ') || 'a player'}…`
+        : state.phase === 'reveal' ? 'Next turn coming up…' : isDrawer ? 'You’re drawing! Watch the guesses roll in 👀' : '✅ You got it! Shhh 🤫';
     if (!canGuess) $('guessError').textContent = '';
-    else if (document.activeElement !== $('guessInput') && document.activeElement?.tagName !== 'INPUT') $('guessInput').focus();
-    if (!$('drawPanel').hidden && document.activeElement !== $('drawInput')) $('drawInput').focus();
+    // Auto-focus on desktop only: on phones it would pop the keyboard over the grid every update.
+    else if (!isTouch.matches && document.activeElement?.tagName !== 'INPUT') $('guessInput').focus();
+    if (drawing && !isTouch.matches && document.activeElement !== $('drawInput')) $('drawInput').focus();
 
     // scoreboard
     const sorted = [...state.players].sort((a, b) => b.score - a.score);
@@ -386,6 +463,37 @@
       })
       .join('');
     if (atBottom) feed.scrollTop = feed.scrollHeight;
+
+    // Phones have no feed panel: show new wrong guesses as little chat bubbles instead.
+    const fresh = lastFeedT === null ? [] : state.feed.filter((f) => f.t > lastFeedT);
+    lastFeedT = state.feed.length ? state.feed[state.feed.length - 1].t : 0;
+    if (phone.matches) fresh.filter((f) => f.type === 'guess').forEach((f) => guessBubble(f));
+  }
+
+  function guessBubble(f) {
+    const box = $('guessBubbles');
+    const el = document.createElement('div');
+    el.className = 'bubble';
+    el.innerHTML = `<span>${f.avatar}</span> ${esc(f.text)}`;
+    el.style.setProperty('--x', `${Math.round(Math.random() * 30)}%`);
+    box.append(el);
+    while (box.children.length > 3) box.firstChild.remove();
+    setTimeout(() => el.remove(), 2800);
+  }
+
+  // Comic-book "event" burst for correct guesses.
+  let comicTimer;
+  function comic(title, sub) {
+    const el = $('comic');
+    const words = ['POW!', 'BAM!', 'ZAP!', 'KAPOW!', 'WHAM!', 'BOOM!'];
+    el.innerHTML = `<div class="comic-burst"><span class="comic-pow">${words[Math.floor(Math.random() * words.length)]}</span>` +
+      `<span class="comic-title">${esc(title)}</span><span class="comic-sub">${esc(sub)}</span></div>`;
+    el.style.setProperty('--tilt', `${(Math.random() * 12 - 6).toFixed(1)}deg`);
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
+    clearTimeout(comicTimer);
+    comicTimer = setTimeout(() => el.classList.remove('show'), 1900);
   }
 
   // Pick dark or white cell-number text, whichever contrasts more with the pixel color (WCAG luminance).
@@ -420,6 +528,14 @@
   // timer tick
   setInterval(() => {
     if (!state?.game || (state.phase !== 'drawing' && state.phase !== 'reveal')) return;
+    if (state.game.paused) {
+      const left = Math.max(0, Math.ceil((pauseDeadline - Date.now()) / 1000));
+      const count = $('pauseCount');
+      if (count) count.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+      $('timer').textContent = '⏸';
+      $('timer').classList.remove('urgent');
+      return;
+    }
     const t = $('timer');
     if (state.phase === 'drawing' && state.game.noTimer) {
       t.textContent = '∞';
@@ -452,5 +568,10 @@
 
   // ---------- boot ----------
   const autoRejoin = roomCode && localStorage.getItem('pixelary-name') && sessionStorage.getItem('pixelary-room') === roomCode;
-  if (!autoRejoin) { showView('homeView'); setupHome(); }
+  if (!autoRejoin) {
+    showView('homeView');
+    setupHome();
+    // Invite link: check right away that the game still exists.
+    if (roomCode) socket.emit('check_room', { code: roomCode }, (res) => { if (!res?.exists) showNotFound(); });
+  }
 })();

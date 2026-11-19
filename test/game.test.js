@@ -1,4 +1,5 @@
 // End-to-end: real server + socket.io clients play through a turn.
+process.env.PIXELARY_PAUSE_MS = '1500'; // short pause so give-up tests run fast
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { io: connect } = require('socket.io-client');
@@ -190,4 +191,97 @@ test('no-timer turns: order-based points, End turn, reveal time, gallery', async
   assert.equal(rs.game.gallery[0].word, secret);
   assert.equal(rs.game.gallery[0].grid.filter(Boolean).length, 9);
   assert.equal(rs.game.gallery[0].artist, ['A', 'B', 'C'][d]);
+});
+
+test('check_room tells invite links whether their game exists', async (t) => {
+  const s = connect(url, { transports: ['websocket'] });
+  t.after(() => s.close());
+  assert.deepEqual(await emit(s, 'check_room', { code: 'ZZZZ' }), { exists: false });
+  const { code } = await emit(s, 'create_room', { name: 'A', playerId: 'checker-aaaaaaa' });
+  assert.deepEqual(await emit(s, 'check_room', { code: code.toLowerCase() }), { exists: true });
+});
+
+// Two players in a game; returns sockets + ids with the drawer identified.
+async function twoPlayerGame(prefix, settings = {}) {
+  const ids = [`${prefix}-host-aaaa`, `${prefix}-guest-bbbb`];
+  const socks = ids.map(() => connect(url, { transports: ['websocket'] }));
+  socks.forEach((s) => s.on('state', (st) => { s.last = st; }));
+  const { code } = await emit(socks[0], 'create_room', { name: 'Host', playerId: ids[0] });
+  await emit(socks[1], 'join_room', { code, name: 'Guest', playerId: ids[1] });
+  if (Object.keys(settings).length) {
+    const set = nextState(socks[0], (s) => Object.entries(settings).every(([k, v]) => s.settings[k] === v));
+    socks[0].emit('update_settings', settings);
+    await set;
+  }
+  const ready = nextState(socks[0], (s) => s.canStart);
+  socks.forEach((s) => s.emit('set_ready', { ready: true }));
+  await ready;
+  const drawing = nextState(socks[0], (s) => s.phase === 'drawing');
+  await emit(socks[0], 'start_game', null);
+  const st = await drawing;
+  const d = ids.indexOf(st.game.drawerId);
+  return { code, ids, socks, d, g: 1 - d };
+}
+
+// Reconnect a player the way a phone does after unlocking: new socket, same playerId.
+async function rejoin(code, id, name) {
+  const s = connect(url, { transports: ['websocket'] });
+  s.on('state', (st) => { s.last = st; });
+  const res = await emit(s, 'join_room', { code, name, playerId: id });
+  assert.equal(res.ok, true);
+  return s;
+}
+
+test('a locked phone pauses the game, and coming back resumes it', async (t) => {
+  const { code, ids, socks, d, g } = await twoPlayerGame('pause1', { turnTime: 60 });
+  const drawer = socks[d];
+  t.after(() => socks.forEach((s) => s.close()));
+  await new Promise((r) => setTimeout(r, 50));
+  const before = drawer.last.game.remainingMs;
+
+  // Guesser's phone locks → drawer sees a paused game, same phase, and can't draw.
+  const paused = nextState(drawer, (s) => s.game?.paused);
+  socks[g].close();
+  const ps = await paused;
+  assert.equal(ps.phase, 'drawing');
+  assert.equal(ps.game.paused.waitingFor[0].name, 'Guest');
+  assert.equal((await emit(drawer, 'draw', { text: 'red 1' })).ok, false);
+
+  // Timer is frozen while paused.
+  await new Promise((r) => setTimeout(r, 600));
+  const resumed = nextState(drawer, (s) => s.game && !s.game.paused);
+  const back = await rejoin(code, ids[g], 'Guest');
+  t.after(() => back.close());
+  const rs = await resumed;
+  assert.equal(rs.phase, 'drawing');
+  assert.ok(rs.game.remainingMs > before - 400, `timer kept its time (${before} → ${rs.game.remainingMs})`);
+  assert.equal((await emit(drawer, 'draw', { text: 'red 1' })).ok, true);
+  assert.ok(rs.feed.some((f) => f.text.includes('is back')));
+});
+
+test('a paused drawer keeps their turn and word', async (t) => {
+  const { code, ids, socks, d, g } = await twoPlayerGame('pause2');
+  t.after(() => socks.forEach((s) => s.close()));
+  const word = socks[d].last.game.word;
+  const paused = nextState(socks[g], (s) => s.game?.paused);
+  socks[d].close();
+  assert.equal((await paused).phase, 'drawing', 'turn not skipped');
+  const resumed = nextState(socks[g], (s) => s.game && !s.game.paused);
+  const back = await rejoin(code, ids[d], 'Drawer');
+  t.after(() => back.close());
+  await resumed;
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(back.last.game.drawerId, ids[d]);
+  assert.equal(back.last.game.word, word);
+});
+
+test('if nobody comes back, the paused game ends on the results screen', async (t) => {
+  const { socks, d, g } = await twoPlayerGame('pause3');
+  t.after(() => socks.forEach((s) => s.close()));
+  await emit(socks[d], 'draw', { text: 'blue all' });
+  const results = nextState(socks[d], (s) => s.phase === 'results');
+  socks[g].close();
+  const rs = await results; // after the (test-shortened) 1.5s pause
+  assert.equal(rs.players.length, 1);
+  assert.ok(rs.feed.some((f) => f.text.includes("didn't make it back")));
 });

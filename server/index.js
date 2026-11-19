@@ -6,7 +6,9 @@ const { createRoom, getRoom } = require('./rooms');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+// Check connections every 10s (timeout 8s) so a phone that silently drops (screen lock) is
+// noticed within ~20s and the game pauses, instead of the default 25-45s.
+const io = new Server(server, { pingInterval: 10_000, pingTimeout: 8_000 });
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.get('/healthz', (_req, res) => res.send('ok'));
@@ -45,6 +47,9 @@ io.on('connection', (socket) => {
     if (!target) return ack({ ok: false, error: `No game found with code ${String(code || '').toUpperCase()}.` });
     enter(target, id, name, ack);
   });
+
+  // Lets an invite link check up front whether its game still exists.
+  socket.on('check_room', ({ code } = {}, ack) => safeAck(ack)({ exists: !!getRoom(code) }));
 
   socket.on('set_ready', ({ ready } = {}) => room?.setReady(playerId, ready));
   socket.on('update_settings', (settings) => room?.updateSettings(playerId, settings));
